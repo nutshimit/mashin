@@ -1,0 +1,28 @@
+[package]
+name = "mashin_runtime"
+version = "0.1.0"
+readme = "README.md"
+description = "The mashin runtime engine"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+deno_ast = { workspace = true, features = ["transpiling"] }
+deno_core.workspace = true
+deno_web.workspace = true
+deno_fetch.workspace = true
+deno_console.workspace = true
+deno_webidl.workspace = true
+deno_url.workspace = true
+deno_websocket.workspace = true
+
+libffi.workspace = true
+anyhow.workspace = true
+mashin_core.workspace = true
+mashin_ffi.workspace = true
+
+tokio = { workspace = true, features = ["fs", "rt-multi-thread"] }
+reqwest = { version = "0.11.15", features = ["blocking", "json", "rustls-tls", "rustls-tls-native-roots", "rustls-tls-webpki-roots"], default-features = false }
+rkv = "0.18.4"

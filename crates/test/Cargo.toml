@@ -1,0 +1,19 @@
+[package]
+name = "atmosphere-test"
+version = "0.1.0"
+edition.workspace = true
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "test"
+crate-type = ["cdylib"]
+
+[dependencies]
+mashin_sdk.workspace = true
+
+url = "2.3"
+aws-config = "0.54.1"
+aws-sdk-s3 = "0.24.0"
+serde = { workspace = true, features = ["derive"] }

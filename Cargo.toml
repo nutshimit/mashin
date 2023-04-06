@@ -1,0 +1,45 @@
+[workspace.package]
+edition = "2021"
+license = "MIT"
+authors = ["Nutshimit Team <hey@mashin.land>"]
+repository = "https://github.com/nutshimit/mashin"
+
+[workspace]
+resolver = "2"
+members = [
+    "core",
+    "runtime",
+    "macro",
+    "cli",
+    "sdk/rust",
+    "crates/*",
+    "ext/*"
+]
+
+[workspace.dependencies]
+anyhow = "1.0.66"
+thiserror = "1.0.37"
+tokio = { version = "=1.25.0", features = ["full"] }
+deno_ast = { version = "=0.25.0", features = ["transpiling"] }
+deno_core = "=0.177.0"
+deno_web = "=0.126.0"
+deno_fetch = "=0.119.0"
+deno_console = "=0.95.0"
+deno_webidl = "=0.95.0"
+deno_url = "=0.95.0"
+deno_websocket = "=0.100.0"
+deno_bindgen = "0.7.0"
+dlopen = "0.1.8"
+serde = { version = "1.0.149", features = ["derive"] }
+serde_json = "1.0.85"
+winapi = "=0.3.9"
+libffi = "3.1.0"
+async-trait = "0.1.68"
+
+mashin_ffi = { version = "0.1.0", path = "./ext/ffi" }
+
+# mashin
+mashin_core = { version = "0.1.0", path = "./core" }
+mashin_runtime = { version = "0.1.0", path = "./runtime" }
+mashin_sdk = { version = "0.1.0", path = "./sdk/rust" }
+mashin_macro = { version = "0.1.0", path = "./macro" }

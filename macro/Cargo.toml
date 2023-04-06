@@ -1,0 +1,17 @@
+[package]
+name = "mashin_macro"
+version = "0.1.0"
+readme = "README.md"
+description = "Proc macro for writing mashin resources"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1.0.109"
+quote = "1.0"
+proc-macro2 = "1.0.56"

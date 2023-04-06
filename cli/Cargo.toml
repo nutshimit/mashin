@@ -1,0 +1,19 @@
+[package]
+name = "mashin"
+version = "0.1.0"
+readme = "README.md"
+description = "Provides the mashin executable"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "mashin"
+doc = false
+
+[dependencies]
+mashin_runtime.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+clap = { version = "4.2.1", features = ["derive"] }
