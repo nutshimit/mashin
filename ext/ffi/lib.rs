@@ -79,7 +79,7 @@ pub(crate) struct FfiState {
     pub(crate) async_work_receiver: mpsc::UnboundedReceiver<PendingFfiAsyncWork>,
 }
 
-deno_core::extension!(deno_ffi,
+deno_core::extension!(mashin_ffi,
   deps = [ deno_web ],
   parameters = [P: FfiPermissions],
   ops = [

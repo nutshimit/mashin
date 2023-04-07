@@ -18,8 +18,8 @@ export class Mashin {
     globalThis.__mashin.engine = this;
   }
 
-  async finished() {
-    await Deno.core.opAsync("as__client_finished", globalThis.__mashin.rid);
+  async apply() {
+    await Deno.core.opAsync("as__client_apply", globalThis.__mashin.rid);
   }
 }
 

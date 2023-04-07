@@ -1,8 +1,8 @@
+use crate::{js_log, log};
 use deno_core::{
     error::{type_error, AnyError},
     resolve_path, serde_json, OpState, Resource, ResourceId,
 };
-use mashin_ffi::{DynamicLibraryResource, NativeType, NativeValue};
 use libffi::middle::Arg;
 use mashin_core::{
     sdk::{
@@ -11,6 +11,7 @@ use mashin_core::{
     },
     Client, ProviderInner, ProviderList, RawState,
 };
+use mashin_ffi::{DynamicLibraryResource, NativeType, NativeValue};
 use std::{
     alloc::{dealloc, Layout},
     cell::RefCell,
@@ -30,8 +31,11 @@ pub(crate) async fn as__client_new(
     op_state: Rc<RefCell<OpState>>,
     backend_rid: Option<ResourceId>,
 ) -> Result<ResourceId> {
+    log!(info, "Engine is initializing...");
+
     let mut op_state = op_state.borrow_mut();
 
+    log!(info, "Getting state lock...");
     let backend = Box::new({
         if let Some(backend_rid) = backend_rid {
             // should be handled by ffi
@@ -46,6 +50,8 @@ pub(crate) async fn as__client_new(
     });
     let backend_pointer = Box::into_raw(backend) as *mut c_void;
 
+    log!(info, "Engine initialized successfully");
+
     let rid = op_state
         .resource_table
         .add(AtmosphereClient::new(backend_pointer, b"mysuperpassword").await?);
@@ -55,7 +61,7 @@ pub(crate) async fn as__client_new(
 }
 
 #[deno_core::op]
-pub(crate) async fn as__client_finished(
+pub(crate) async fn as__client_apply(
     op_state: Rc<RefCell<OpState>>,
     client_rid: ResourceId,
 ) -> Result<()> {
@@ -72,14 +78,28 @@ pub(crate) async fn as__client_finished(
     };
 
     let resources_in_storage = backend.resources().await?;
+    let diffs = resources_in_storage.difference(&atmos_state.executed_resource);
 
-    for diff in resources_in_storage.difference(&atmos_state.executed_resource) {
-        println!("missing: {}, probably need to delete?", diff);
+    if dialoguer::Confirm::new()
+        .with_prompt(format!(
+            "\nYou have {} pending changes, do you want to apply?",
+            diffs.clone().count()
+        ))
+        .interact()?
+    {
+        for diff in diffs {
+            println!("missing: {}, probably need to delete?", diff);
+        }
+    } else {
+        println!("nevermind then :(");
     }
 
     Ok(())
 }
 
+// run in dry run mode and register the current state then we can compare
+// in `as__client_apply` for all resources and then apply only the changes
+// we want
 #[deno_core::op]
 pub(crate) async fn as__runtime__provider__execute(
     rc_op_state: Rc<RefCell<OpState>>,
@@ -276,11 +296,22 @@ pub(crate) fn op_get_env(key: String) -> Result<Option<String>> {
     Ok(r)
 }
 
+#[deno_core::op]
+pub fn as__client_print(msg: &str, is_err: bool) -> Result<()> {
+    if is_err {
+        js_log!(error, "{}", msg);
+    } else {
+        js_log!(warn, "{}", msg);
+    }
+    Ok(())
+}
+
 pub(crate) fn op_decls() -> Vec<::deno_core::OpDecl> {
     vec![
         op_get_env::decl(),
+        as__client_print::decl(),
         as__client_new::decl(),
-        as__client_finished::decl(),
+        as__client_apply::decl(),
         as__runtime__register_provider__allocate::decl(),
         as__runtime__provider__execute::decl(),
     ]

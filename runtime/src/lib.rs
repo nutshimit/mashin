@@ -1,10 +1,11 @@
 use anyhow::{anyhow, bail, Result};
 use deno_ast::{MediaType, ParseParams, SourceTextInfo};
 use deno_core::error::AnyError;
+use deno_core::futures::channel::oneshot::Receiver;
 use deno_core::futures::FutureExt;
 use deno_core::serde_json::json;
 use deno_core::{
-    include_js_files, resolve_import, resolve_path, Extension, JsRuntime, ModuleLoader,
+    include_js_files, resolve_import, resolve_path, Extension, JsRuntime, ModuleCode, ModuleLoader,
     ModuleSource, ModuleSourceFuture, ModuleSpecifier, ModuleType, OpDecl, ResolutionKind,
     RuntimeOptions,
 };
@@ -14,14 +15,30 @@ use deno_web::TimersPermission;
 use deno_websocket::WebSocketPermissions;
 use reqwest::Url;
 use std::env::current_dir;
+use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::rc::Rc;
 mod builtin;
 
-pub enum Subcommand {
-    Run { main_module: String, dry_run: bool },
-    Destroy { main_module: String },
+#[macro_export]
+macro_rules! log {
+	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
+		log::$level!(
+			target: "mashin::core",
+            $patter $(, $values)*
+		)
+	};
+}
+
+#[macro_export]
+macro_rules! js_log {
+	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
+		log::$level!(
+			target: "mashin::js",
+            $patter $(, $values)*
+		)
+	};
 }
 
 struct AllowAllPermissions;
@@ -62,99 +79,147 @@ impl mashin_ffi::FfiPermissions for AllowAllPermissions {
     }
 }
 
-pub fn create_js_runtime() -> JsRuntime {
-    let extension = Extension::builder("mashin_core")
-        .esm(include_js_files!(
-            mashin_core dir "js",
-            "01_errors.js",
-            "06_util.js",
-            "30_os.js",
-            "98_global_scope.js",
-            "99_main.js",
-        ))
-        .ops(stdlib())
-        .state(move |state| {
-            state.put(AllowAllPermissions {});
-            state.put(mashin_ffi::Unstable(true));
-        })
-        .build();
-
-    JsRuntime::new(RuntimeOptions {
-        extensions: vec![
-            deno_console::deno_console::init_ops_and_esm(),
-            deno_webidl::deno_webidl::init_ops_and_esm(),
-            deno_url::deno_url::init_ops_and_esm(),
-            deno_web::deno_web::init_ops_and_esm::<AllowAllPermissions>(BlobStore::default(), None),
-            deno_fetch::deno_fetch::init_ops_and_esm::<AllowAllPermissions>(deno_fetch::Options {
-                user_agent: format!("mashin_core/{}", env!("CARGO_PKG_VERSION")),
-                ..Default::default()
-            }),
-            deno_websocket::deno_websocket::init_ops_and_esm::<AllowAllPermissions>(
-                format!("mashin_core/{}", env!("CARGO_PKG_VERSION")),
-                None,
-                None,
-            ),
-            mashin_ffi::deno_ffi::init_ops_and_esm::<AllowAllPermissions>(
-                true, // not unstable
-            ),
-            extension,
-        ],
-        module_loader: Some(Rc::new(TypescriptModuleLoader)),
-
-        ..Default::default()
-    })
+pub struct Runtime {
+    runtime: JsRuntime,
+    main_module: String,
+    command: RuntimeCommand,
+    raw_args: Vec<String>,
 }
 
-pub async fn execute_with_custom_runtime(command: Subcommand, raw_args: Vec<String>) -> Result<()> {
-    let main_module_path = match command {
-        Subcommand::Run { main_module, .. } | Subcommand::Destroy { main_module } => main_module,
-    };
+pub enum RuntimeCommand {
+    Run { dry_run: bool },
+    Destroy,
+}
 
-    let mut js_runtime = create_js_runtime();
-    let main_module = resolve_path(&main_module_path, current_dir()?.as_path())?;
-    let mod_id = js_runtime.load_main_module(&main_module, None).await?;
+impl Deref for Runtime {
+    type Target = JsRuntime;
 
-    js_runtime.execute_script(
-        "name",
-        format!(
-            r#"globalThis.bootstrap.mainRuntime({})"#,
-            json!({
-                "args": raw_args,
-                "target": env!("TARGET")
+    fn deref(&self) -> &Self::Target {
+        &self.runtime
+    }
+}
+
+impl DerefMut for Runtime {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.runtime
+    }
+}
+
+impl Runtime {
+    pub fn new(main_module: &str, command: RuntimeCommand, raw_args: Vec<String>) -> Self {
+        let extension = Extension::builder("mashin_core")
+            .esm(include_js_files!(
+                mashin_core dir "js",
+                "01_errors.js",
+                "06_util.js",
+                "30_os.js",
+                "98_global_scope.js",
+                "99_main.js",
+            ))
+            .ops(stdlib())
+            .state(move |state| {
+                state.put(AllowAllPermissions {});
+                state.put(mashin_ffi::Unstable(true));
             })
-        ),
-    )?;
+            .build();
 
-    let result_main = js_runtime.mod_evaluate(mod_id);
-    // execute main module
-    js_runtime.run_event_loop(false).await?;
+        let runtime = JsRuntime::new(RuntimeOptions {
+            extensions: vec![
+                deno_console::deno_console::init_ops_and_esm(),
+                deno_webidl::deno_webidl::init_ops_and_esm(),
+                deno_url::deno_url::init_ops_and_esm(),
+                deno_web::deno_web::init_ops_and_esm::<AllowAllPermissions>(
+                    BlobStore::default(),
+                    None,
+                ),
+                deno_fetch::deno_fetch::init_ops_and_esm::<AllowAllPermissions>(
+                    deno_fetch::Options {
+                        user_agent: format!("mashin_core/{}", env!("CARGO_PKG_VERSION")),
+                        ..Default::default()
+                    },
+                ),
+                mashin_ffi::mashin_ffi::init_ops_and_esm::<AllowAllPermissions>(
+                    true, // not unstable
+                ),
+                extension,
+            ],
+            module_loader: Some(Rc::new(TypescriptModuleLoader)),
 
-    // run mashin engine in a side module
-    let specifier = deno_core::resolve_url(&format!("file:///__mashin.js")).unwrap();
-    let side_mod_id = js_runtime
-        .load_side_module(
-            &specifier,
-            Some(
-                r#"
+            ..Default::default()
+        });
+
+        Self {
+            command,
+            main_module: main_module.to_string(),
+            runtime,
+            raw_args,
+        }
+    }
+
+    pub async fn run(&mut self) -> Result<()> {
+        // bootstrap the engine
+        self.bootstrap()?;
+
+        // dry run, get state of all resources
+        // from each providers and save into the gothamstate
+        self.dry_run().await?;
+
+        // compare with current local state
+        // and apply pending changes
+        self.apply().await
+    }
+
+    // trigger `bootstrapMainRuntime` in `js/99_main.js`
+    fn bootstrap(&mut self) -> Result<()> {
+        self.runtime.execute_script(
+            "file:///__bootstrap.js",
+            format!(
+                r#"globalThis.bootstrap.mainRuntime({})"#,
+                json!({
+                    // allow parsing env with Deno.args
+                    "args": self.raw_args,
+                    // allow target with Deno.env
+                    "target": env!("TARGET")
+                })
+            ),
+        )?;
+        Ok(())
+    }
+
+    // run the main module, evaluating each resource
+    async fn dry_run(&mut self) -> Result<()> {
+        let main_module = resolve_path(&self.main_module, current_dir()?.as_path())?;
+        let mod_id = self.runtime.load_main_module(&main_module, None).await?;
+        let result_main = self.runtime.mod_evaluate(mod_id);
+        self.runtime.run_event_loop(false).await?;
+        result_main.await?
+    }
+
+    // trigger the `as__client_apply` ops
+    async fn apply(&mut self) -> Result<()> {
+        let specifier = deno_core::resolve_url(&format!("file:///__apply.js"))?;
+        let mod_id = self
+            .runtime
+            .load_side_module(
+                &specifier,
+                Some(
+                    r#"
                     if (!globalThis.__mashin) {
                         throw new Error("Mashin engine not initialized")
                     }
-                    await globalThis.__mashin.engine.finished();
-                "#
-                .into(),
-            ),
-        )
-        .await?;
+                    await globalThis.__mashin.engine.apply();
+                    "#
+                    .into(),
+                ),
+            )
+            .await?;
 
-    let result_side = js_runtime.mod_evaluate(side_mod_id);
+        let mod_evaluate = self.runtime.mod_evaluate(mod_id);
+        self.runtime.run_event_loop(false).await?;
+        mod_evaluate.await??;
 
-    js_runtime.run_event_loop(false).await?;
-
-    // execute result on both modules
-    result_main.await??;
-    result_side.await??;
-
-    Ok(())
+        Ok(())
+    }
 }
 
 fn stdlib() -> Vec<OpDecl> {
@@ -167,7 +232,7 @@ fn stdlib() -> Vec<OpDecl> {
 struct TypescriptModuleLoader;
 
 impl TypescriptModuleLoader {
-    async fn load_from_deno_std(path: &Url) -> Result<String> {
+    async fn load_from_remote_url(path: &Url) -> Result<String> {
         println!("Load: {}", path);
         let response = reqwest::get(path.clone()).await?;
         response.text().await.map_err(Into::into)
@@ -219,7 +284,7 @@ impl ModuleLoader for TypescriptModuleLoader {
 
             let code = match module_specifier.scheme() {
                 "file" => TypescriptModuleLoader::load_from_filesystem(&module_specifier).await?,
-                "https" => TypescriptModuleLoader::load_from_deno_std(&module_specifier).await?,
+                "https" => TypescriptModuleLoader::load_from_remote_url(&module_specifier).await?,
                 _ => {
                     return Err(anyhow!(
                         "Unsupported module specifier: {}",

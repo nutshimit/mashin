@@ -1,4 +1,6 @@
+use crate::Result;
 use clap::Parser;
+use mashin_runtime::Runtime;
 
 #[derive(Debug, Parser)]
 pub struct Cli {
@@ -27,19 +29,28 @@ pub struct DestroyCmd {
     pub main_module: String,
 }
 
-impl Into<mashin_runtime::Subcommand> for RunCmd {
-    fn into(self) -> mashin_runtime::Subcommand {
-        mashin_runtime::Subcommand::Run {
-            main_module: self.main_module,
-            dry_run: self.dry_run,
-        }
+impl RunCmd {
+    pub async fn run(&self, args: Vec<String>) -> Result<()> {
+        Runtime::new(
+            &self.main_module,
+            mashin_runtime::RuntimeCommand::Run {
+                dry_run: self.dry_run,
+            },
+            args,
+        )
+        .run()
+        .await
     }
 }
 
-impl Into<mashin_runtime::Subcommand> for DestroyCmd {
-    fn into(self) -> mashin_runtime::Subcommand {
-        mashin_runtime::Subcommand::Destroy {
-            main_module: self.main_module,
-        }
+impl DestroyCmd {
+    pub async fn run(&self, args: Vec<String>) -> Result<()> {
+        Runtime::new(
+            &self.main_module,
+            mashin_runtime::RuntimeCommand::Destroy {},
+            args,
+        )
+        .run()
+        .await
     }
 }

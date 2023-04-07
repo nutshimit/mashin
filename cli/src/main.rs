@@ -1,6 +1,6 @@
+pub(crate) use anyhow::Result;
 use clap::Parser;
 use cli::{Cli, Subcommand};
-use mashin_runtime::execute_with_custom_runtime;
 use std::env;
 
 mod cli;
@@ -10,13 +10,28 @@ pub async fn main() -> Result<(), anyhow::Error> {
     let args: Vec<String> = env::args().collect();
     let cli = Cli::parse();
 
+    setup_log_output();
     setup_panic_hook();
 
     match cli.subcommand {
-        Subcommand::Run(run) => execute_with_custom_runtime(run.into(), args),
-        Subcommand::Destroy(destroy) => execute_with_custom_runtime(destroy.into(), args),
+        Subcommand::Run(cmd) => cmd.run(args).await,
+        Subcommand::Destroy(cmd) => cmd.run(args).await,
     }
-    .await
+}
+
+fn setup_log_output() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .filter_module("rustyline", log::LevelFilter::Off)
+        // FIXME: We should look why they throw lot of output
+        .filter_module("swc_ecma_codegen", log::LevelFilter::Off)
+        .filter_module("swc_ecma_transforms_base", log::LevelFilter::Error)
+        // wgpu crates (gfx_backend), have a lot of useless INFO and WARN logs
+        .filter_module("wgpu", log::LevelFilter::Error)
+        .filter_module("gfx", log::LevelFilter::Error)
+        // used to make available the lsp_debug which is then filtered out at runtime
+        // in the cli logger
+        .filter_module("deno::lsp::performance", log::LevelFilter::Debug)
+        .init();
 }
 
 fn setup_panic_hook() {

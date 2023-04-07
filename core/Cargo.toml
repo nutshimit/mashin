@@ -10,14 +10,12 @@ repository.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-thiserror.workspace = true
-deno_core.workspace = true
 tokio.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 async-trait.workspace = true
-mashin_sdk.workspace = true
 mashin_ffi.workspace = true
+mashin_sdk.workspace = true
 
 url = "2.3"
 syn = "1.0.109"

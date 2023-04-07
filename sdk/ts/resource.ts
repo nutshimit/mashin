@@ -59,8 +59,8 @@ export abstract class Provider extends Base {
   async setup() {
     await Deno.core.opAsync(
       "as__runtime__register_provider__allocate",
-      this.#rid, // ressource id of this provider to match in the opstate
-      this.name // ressource id of this provider to match in the opstate
+      this.#rid,
+      this.name
     );
 
     return this;

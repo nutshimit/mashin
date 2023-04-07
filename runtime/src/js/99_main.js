@@ -6,7 +6,7 @@ import { globalScope } from "ext:mashin_core/98_global_scope.js";
 import { env } from "ext:mashin_core/30_os.js";
 import { errors } from "ext:mashin_core/01_errors.js";
 import DOMException from "ext:deno_web/01_dom_exception.js";
-import * as ffi from "ext:deno_ffi/00_ffi.js";
+import * as ffi from "ext:mashin_ffi/00_ffi.js";
 
 // Set up global properties
 ObjectDefineProperties(globalThis, globalScope);

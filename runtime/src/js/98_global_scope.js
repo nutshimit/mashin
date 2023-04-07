@@ -8,8 +8,7 @@ import * as response from "ext:deno_fetch/23_response.js";
 import * as fetch from "ext:deno_fetch/26_fetch.js";
 // utils
 import * as util from "ext:mashin_core/06_util.js";
-// websocket
-import * as webSocket from "ext:deno_websocket/01_websocket.js";
+
 // web
 import * as event from "ext:deno_web/02_event.js";
 import * as timers from "ext:deno_web/02_timers.js";
@@ -22,7 +21,9 @@ const core = globalThis.Deno.core;
 
 const globalScope = {
   console: util.nonEnumerable(
-    new console.Console((msg, level) => core.print(msg, level > 1))
+    new console.Console((msg, level) =>
+      core.ops.as__client_print(msg, level > 1)
+    )
   ),
   ErrorEvent: util.nonEnumerable(event.ErrorEvent),
   Event: util.nonEnumerable(event.Event),
@@ -32,7 +33,6 @@ const globalScope = {
   Response: util.nonEnumerable(response.Response),
   FormData: util.nonEnumerable(formData.FormData),
   fetch: util.nonEnumerable(fetch.fetch),
-  WebSocket: util.nonEnumerable(webSocket.WebSocket),
   setInterval: util.writable(timers.setInterval),
   setTimeout: util.writable(timers.setTimeout),
   atob: util.writable(base64.atob),
