@@ -17,4 +17,4 @@ mashin_macro.workspace = true
 tokio.workspace = true
 
 urn = "0.5.1"
-itertools = "0.10"
+dyn-clone = "1.0.11"

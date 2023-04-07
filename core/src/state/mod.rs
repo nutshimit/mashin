@@ -1,3 +1,4 @@
+mod diff;
 mod state_handler;
 mod trim_sensitive;
 

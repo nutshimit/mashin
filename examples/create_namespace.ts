@@ -15,7 +15,7 @@ const provider = await new aws.Provider("aws", {
 const bucket = await new aws.s3.Bucket(
   "test1234atmos001",
   {
-    acl: "public-read",
+    acl: "AAAAAAAAdsafadfadfadsAA",
   },
   {
     provider,

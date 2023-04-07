@@ -161,6 +161,7 @@ version = "0.1.0"
 dependencies = [
  "aws-config",
  "aws-sdk-s3",
+ "log",
  "mashin_sdk",
  "serde",
  "url",
@@ -1828,6 +1829,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.21.0",
+ "itertools",
  "mashin_ffi",
  "mashin_sdk",
  "quote 1.0.26",
@@ -1892,7 +1894,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "itertools",
+ "dyn-clone",
  "mashin_macro",
  "serde",
  "serde_json",

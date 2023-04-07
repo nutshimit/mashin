@@ -19,7 +19,11 @@ export class Mashin {
   }
 
   async apply() {
-    await Deno.core.opAsync("as__client_apply", globalThis.__mashin.rid);
+    await Deno.core.opAsync(
+      "as__client_apply",
+      globalThis.__mashin.rid,
+      globalThis.__mashin.providers
+    );
   }
 }
 

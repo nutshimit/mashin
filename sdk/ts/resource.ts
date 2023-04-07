@@ -63,6 +63,8 @@ export abstract class Provider extends Base {
       this.name
     );
 
+    globalThis.__mashin.providers.push([this.name, this.#rid]);
+
     return this;
   }
 }
@@ -96,12 +98,11 @@ export abstract class Resource<
 
   async create() {
     this.#output = await Deno.core.opAsync(
-      "as__runtime__provider__execute",
+      "as__runtime__provider__dry_run",
       globalThis.__mashin.rid,
       this.#opts.provider.rid,
       this.#urn,
-      this.props,
-      false
+      this.props
     );
     return this;
   }

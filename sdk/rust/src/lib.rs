@@ -1,12 +1,17 @@
+use std::{any::Any, rc::Rc};
+
 pub use crate::urn::Urn;
+pub use anyhow::Result;
 use async_trait::async_trait;
 pub use deserialize::deserialize_state_field;
-pub use diff::compare_json_objects_recursive;
+use dyn_clone::DynClone as ResourceClone;
 pub use mashin_macro::resource;
 pub use provider_state::ProviderState;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 
 mod deserialize;
-mod diff;
+
 mod provider_state;
 mod urn;
 
@@ -23,7 +28,6 @@ pub mod ext {
     pub use tokio;
 }
 
-pub use anyhow::Result;
 pub type ResourceId = u32;
 
 pub enum ResourceAction {
@@ -33,19 +37,112 @@ pub enum ResourceAction {
     Get,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ResourceDiff(Vec<String>);
+
+impl ResourceDiff {
+    pub fn new(diff: Vec<String>) -> Self {
+        Self(diff)
+    }
+
+    pub fn has_change(&self, key: impl ToString) -> bool {
+        self.0.contains(&key.to_string())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ResourceResult(serde_json::Value);
+
+impl ResourceResult {
+    pub fn new(raw_state_as_json: serde_json::Value) -> Self {
+        ResourceResult(raw_state_as_json)
+    }
+
+    pub fn inner(&self) -> serde_json::Value {
+        self.0.clone()
+    }
+}
+
+dyn_clone::clone_trait_object!(Resource);
+
+pub trait ResourceEq {
+    // An &Any can be cast to a reference to a concrete type.
+    fn as_any(&self) -> &dyn Any;
+
+    // Perform the test.
+    fn is_eq(&self, other: &dyn Resource) -> bool;
+}
+
+pub trait ResourceSerialize {
+    fn to_raw_state(&self) -> Result<serde_json::Value>;
+}
+
 #[async_trait]
-pub trait Resource {
-    async fn get(&mut self, provider_state: &ProviderState) -> Result<bool>;
+pub trait Resource: ResourceClone + ResourceEq + ResourceSerialize {
+    fn __default_with_params(name: &str, urn: &str) -> Self
+    where
+        Self: Sized;
+
+    fn __set_config_from_value(&mut self, config: &Value);
+
+    fn from_current_state(name: &str, urn: &str, state: &Value) -> Result<Box<Self>>
+    where
+        Self: Default,
+        for<'de> Self: Deserialize<'de>,
+    {
+        if state.as_null().is_some() {
+            Ok(Box::new(Self::__default_with_params(name, urn)))
+        } else {
+            let mut state = state.clone();
+            let merge_fields = json!({
+                "__name": {
+                    "value": name,
+                    "sensitive": true,
+                },
+                "__urn": {
+                    "value": urn,
+                    "sensitive": true,
+                },
+            });
+
+            merge_json(&mut state, &merge_fields);
+
+            Ok(Box::new(::serde_json::from_value::<Self>(state)?))
+        }
+    }
+
+    async fn get(&mut self, provider_state: &ProviderState) -> Result<()>;
     async fn create(&mut self, provider_state: &ProviderState) -> Result<()>;
     async fn delete(&mut self, provider_state: &ProviderState) -> Result<()>;
-    async fn update(&mut self, provider_state: &ProviderState) -> Result<()>;
+    async fn update(&mut self, provider_state: &ProviderState, diff: &ResourceDiff) -> Result<()>;
+}
+
+impl<R: 'static + PartialEq> ResourceEq for R {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn is_eq(&self, other: &dyn Resource) -> bool {
+        // Do a type-safe casting. If the types are different,
+        // return false, otherwise test the values for equality.
+        other
+            .as_any()
+            .downcast_ref::<R>()
+            .map_or(false, |a| self == a)
+    }
+}
+
+impl<R: Serialize> ResourceSerialize for R {
+    fn to_raw_state(&self) -> Result<serde_json::Value> {
+        serde_json::to_value(self).map_err(Into::into)
+    }
 }
 
 #[async_trait]
 pub trait Provider: Send + Sync {
-    //fn new(runtime: &tokio::runtime::Handle) -> Self;
     async fn init(&mut self) -> Result<()>;
     fn state(&self) -> &ProviderState;
+    fn __from_current_state(&self, urn: &Urn, state: &Value) -> Result<Box<dyn Resource>>;
 }
 
 pub fn merge_json(a: &mut serde_json::Value, b: &serde_json::Value) {

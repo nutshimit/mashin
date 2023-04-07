@@ -1,8 +1,8 @@
-use super::{KEYS_CORE, KEY_VALUE};
 use itertools::merge_join_by;
 use itertools::EitherOrBoth::{Both, Left, Right};
+use mashin_sdk::{ResourceDiff, KEYS_CORE, KEY_VALUE};
 
-pub fn compare_json_objects_recursive(
+pub fn compare_raw_state_recursive(
     a: &serde_json::Value,
     b: &serde_json::Value,
     path: Option<&str>,
@@ -26,11 +26,11 @@ pub fn compare_json_objects_recursive(
                         let removed_keys = collect_all_keys_with_prefix(v, &nested_path);
                         if removed_keys.is_empty() {
                             if !is_value || in_value {
-                                keys_with_diffs.push(format!("- {}", nested_path));
+                                keys_with_diffs.push(nested_path);
                             }
                         } else {
                             for removed_key in removed_keys {
-                                keys_with_diffs.push(format!("- {}", removed_key));
+                                keys_with_diffs.push(removed_key);
                             }
                         }
                     }
@@ -43,11 +43,11 @@ pub fn compare_json_objects_recursive(
                         let added_keys = collect_all_keys_with_prefix(v, &nested_path);
                         if added_keys.is_empty() {
                             if !is_value || in_value {
-                                keys_with_diffs.push(format!("+ {}", nested_path));
+                                keys_with_diffs.push(nested_path);
                             }
                         } else {
                             for added_key in added_keys {
-                                keys_with_diffs.push(format!("+ {}", added_key));
+                                keys_with_diffs.push(added_key);
                             }
                         }
                     }
@@ -57,7 +57,7 @@ pub fn compare_json_objects_recursive(
                         }
                         let is_value = k1 == KEY_VALUE;
                         let nested_path = join_path(path, k1, is_value);
-                        let nested_diffs = compare_json_objects_recursive(
+                        let nested_diffs = compare_raw_state_recursive(
                             v1,
                             v2,
                             Some(&nested_path),
@@ -70,7 +70,7 @@ pub fn compare_json_objects_recursive(
         }
         _ => {
             if a != b && in_value {
-                keys_with_diffs.push(format!("* {}", path));
+                keys_with_diffs.push(path.to_string());
             }
         }
     }
@@ -79,19 +79,23 @@ pub fn compare_json_objects_recursive(
 }
 
 fn join_path(path: &str, segment: &str, is_value: bool) -> String {
+    let segment = segment
+        .replace("__name", "name")
+        .replace("__urn", "urn")
+        .replace("__config", "config");
     if is_value {
         format!(
             "{}{}",
             path,
             segment
-                .strip_prefix(&format!("{}/", KEY_VALUE))
+                .strip_prefix(&format!("{}.", KEY_VALUE))
                 .unwrap_or_default()
                 .to_string()
         )
     } else if path.is_empty() {
         segment.to_string()
     } else {
-        format!("{}/{}", path, segment)
+        format!("{}.{}", path, segment)
     }
 }
 
@@ -106,14 +110,14 @@ fn collect_all_keys_with_prefix(json_value: &serde_json::Value, prefix: &str) ->
                 if k == KEY_VALUE {
                     keys.push(prefix.to_string());
                 } else {
-                    let nested_prefix = format!("{}{}/", prefix, k);
+                    let nested_prefix = format!("{}{}.", prefix, k);
                     keys.extend(collect_all_keys_with_prefix(v, &nested_prefix));
                 }
             }
         }
         serde_json::Value::Array(arr) => {
             for (i, v) in arr.iter().enumerate() {
-                let nested_prefix = format!("{}{}/", prefix, i);
+                let nested_prefix = format!("{}{}.", prefix, i);
                 keys.extend(collect_all_keys_with_prefix(v, &nested_prefix));
             }
         }

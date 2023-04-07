@@ -11,7 +11,14 @@ export const lib = Deno.dlopen(url, {
     result: "pointer",
   },
   run: {
-    parameters: ["pointer", "pointer", "pointer", "pointer", "pointer"],
+    parameters: [
+      "pointer",
+      "pointer",
+      "pointer",
+      "pointer",
+      "pointer",
+      "pointer",
+    ],
     result: "pointer",
   },
   drop: {

@@ -111,4 +111,5 @@ globalThis.bootstrap = {
 globalThis.__mashin = {
   rid: null,
   engine: null,
+  providers: [],
 };

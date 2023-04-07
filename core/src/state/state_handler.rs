@@ -1,4 +1,4 @@
-use super::trim_sensitive;
+use super::{diff::compare_raw_state_recursive, trim_sensitive};
 use crate::{
     sdk::{
         ext::{
@@ -15,6 +15,7 @@ use crate::{
     Result,
 };
 use base64::{engine::general_purpose, Engine as _};
+use mashin_sdk::ResourceDiff;
 use sodiumoxide::crypto::{pwhash, secretbox};
 use std::{collections::BTreeSet, fmt};
 
@@ -123,6 +124,10 @@ impl RawState {
 
     pub fn generate_ts_output(&self) -> Value {
         trim_sensitive::trim_sensitive_fields(&self.0)
+    }
+
+    pub fn compare_with(&self, b: &RawState, path: Option<&str>, in_value: bool) -> ResourceDiff {
+        ResourceDiff::new(compare_raw_state_recursive(&self.0, &b.0, path, in_value))
     }
 }
 
