@@ -165,6 +165,7 @@ impl From<serde_json::Value> for RawState {
 pub trait StateHandler {
     async fn save(&self, urn: &Urn, state: &EncryptedState) -> Result<()>;
     async fn get(&self, urn: &Urn) -> Result<Option<EncryptedState>>;
+    async fn delete(&self, urn: &Urn) -> Result<()>;
     async fn resources(&self) -> Result<BTreeSet<Urn>>;
 }
 

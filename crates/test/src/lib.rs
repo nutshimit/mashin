@@ -228,7 +228,6 @@ pub extern "C" fn run(
         .expect("Valid resource");
 
     // grab the state before applying our values
-    let current_state = resource.clone();
     resource.__set_config_from_value(config);
 
     runtime

@@ -42,6 +42,13 @@ impl BackendState {
             BackendState::Plugin(_) => todo!(),
         }
     }
+
+    pub async fn delete(&self, urn: &Urn) -> Result<()> {
+        match self {
+            BackendState::Local(local) => local.delete(urn).await,
+            BackendState::Plugin(_) => todo!(),
+        }
+    }
 }
 
 pub struct FileState {
@@ -100,7 +107,7 @@ impl StateHandler for FileState {
         let raw_json = serde_json::to_string(state)?;
         let json_value = rkv::Value::Str(&raw_json);
 
-        store.put(&mut writer, urn, &json_value).unwrap();
+        store.put(&mut writer, urn, &json_value)?;
         writer.commit().map_err(Into::into)
     }
 
@@ -116,5 +123,15 @@ impl StateHandler for FileState {
         }
 
         Ok(all_resources)
+    }
+
+    async fn delete(&self, urn: &Urn) -> Result<()> {
+        let env = self.db.read().or_else(|_| bail!("unable to get env"))?;
+        let store = env.open_single("state", StoreOptions::create())?;
+        let mut writer = env.write()?;
+
+        store.delete(&mut writer, urn)?;
+
+        writer.commit().map_err(Into::into)
     }
 }

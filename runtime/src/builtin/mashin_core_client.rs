@@ -1,7 +1,9 @@
 use crate::{js_log, log};
 use deno_core::{
     error::{type_error, AnyError},
-    resolve_path, serde_json, OpState, Resource, ResourceId,
+    resolve_path,
+    serde_json::{self, Value},
+    OpState, Resource, ResourceId,
 };
 use libffi::middle::Arg;
 use mashin_core::{
@@ -87,7 +89,7 @@ pub(crate) async fn as__client_apply(
                 .ok_or(anyhow!("invalid function"))?
                 .clone()
         };
-        providers_by_name.insert(provider_name, symbols);
+        providers_by_name.insert(provider_name, (provider_rid, symbols));
     }
 
     let resources_in_storage = backend.resources().await?;
@@ -124,12 +126,64 @@ pub(crate) async fn as__client_apply(
         .interact()?
     {
         for urn in to_delete {
-            let parsed_urn = ParsedResourceUrn::try_from(urn)?;
-            let delete_fn = providers_by_name
-                .get(&parsed_urn.provider)
-                .ok_or(anyhow!("invalid function"))?;
+            let parsed_urn = ParsedResourceUrn::try_from(urn.clone())?;
+            let (provider_rid, run_symbol) = providers_by_name.get(&parsed_urn.provider).ok_or(
+                anyhow!("invalid provider, make sure to initialize it before"),
+            )?;
+
+            let provider_in_state = mashin_state
+                .get_provider_by_rid(provider_rid)
+                .ok_or(anyhow!("invalid provider"))?;
+
+            let diff_pointer = Box::into_raw(Box::new(ResourceDiff::default())) as *mut c_void;
+            let urn_pointer = Box::into_raw(Box::new(urn.clone())) as *mut c_void;
+            let action_pointer = Box::into_raw(Box::new(ResourceAction::Delete)) as *mut c_void;
+            let empty_state_pointer = Box::into_raw(Box::new(Value::default())) as *mut c_void;
+            let empty_config_pointer = Box::into_raw(Box::new(Value::default())) as *mut c_void;
+
+            unsafe {
+                let call_args = vec![
+                    NativeValue {
+                        pointer: provider_in_state.provider,
+                    }
+                    .as_arg(&NativeType::Pointer),
+                    NativeValue {
+                        pointer: urn_pointer,
+                    }
+                    .as_arg(&NativeType::Pointer),
+                    NativeValue {
+                        pointer: empty_state_pointer,
+                    }
+                    .as_arg(&NativeType::Pointer),
+                    NativeValue {
+                        pointer: empty_config_pointer,
+                    }
+                    .as_arg(&NativeType::Pointer),
+                    NativeValue {
+                        pointer: action_pointer,
+                    }
+                    .as_arg(&NativeType::Pointer),
+                    // diff is only used on update
+                    NativeValue {
+                        pointer: diff_pointer,
+                    }
+                    .as_arg(&NativeType::Pointer),
+                ];
+
+                // execute the ffi run() function for this provider with arguments
+                // defined above
+                let provider_state = run_symbol
+                    .cif
+                    .call::<*mut ResourceResult>(run_symbol.ptr, &call_args);
+
+                // drop the provider state and use the cloned state above instead
+                ptr::drop_in_place(provider_state);
+                dealloc(provider_state as *mut u8, Layout::new::<ResourceResult>());
+            };
+
+            log!(info, "Resource deleted: {}", urn);
+            backend.delete(&urn).await?;
         }
-        log!(info, "Updating the resouroces...");
     } else {
         log!(
             info,
@@ -210,13 +264,6 @@ pub(crate) async fn as__runtime__provider__dry_run(
     // if you need to add a pointer above, make sure it get added in the
     // cleanup function below as well
     let pointers_cleanup = || unsafe {
-        // drop the config
-        ptr::drop_in_place(config_pointer);
-        dealloc(
-            config_pointer as *mut u8,
-            Layout::new::<serde_json::Value>(),
-        );
-
         // drop the urn
         ptr::drop_in_place(urn_pointer);
         dealloc(urn_pointer as *mut u8, Layout::new::<Urn>());
@@ -276,7 +323,17 @@ pub(crate) async fn as__runtime__provider__dry_run(
 
     // Insert the diff
     let diff = state.compare_with(&current_resource_state, None, false);
-    mashin_state.executed_resource.insert(urn, diff);
+
+    let executed_resource = ResourcePending {
+        provider: provider_in_state.provider,
+        config: config_pointer,
+        current_state: current_resource_state_pointer,
+        diff,
+    };
+
+    mashin_state
+        .executed_resource
+        .insert(urn, executed_resource);
 
     pointers_cleanup();
 
@@ -365,6 +422,13 @@ pub(crate) fn op_decls() -> Vec<::deno_core::OpDecl> {
     ]
 }
 
+pub(crate) struct ResourcePending {
+    provider: *mut c_void,
+    current_state: *mut c_void,
+    config: *mut c_void,
+    diff: ResourceDiff,
+}
+
 // Re export client  to be able
 // to impl Resource on it
 pub(crate) struct MashinClient(pub Client);
@@ -380,7 +444,7 @@ impl Resource for MashinClient {} // Blank impl
 #[derive(Default)]
 pub struct MashinState {
     providers: ProviderList,
-    executed_resource: BTreeMap<Urn, ResourceDiff>,
+    executed_resource: BTreeMap<Urn, ResourcePending>,
     rid: ResourceId,
 }
 

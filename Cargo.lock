@@ -1894,7 +1894,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "dyn-clone",
  "mashin_macro",
  "serde",
  "serde_json",

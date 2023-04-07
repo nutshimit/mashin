@@ -4,7 +4,6 @@ pub use crate::urn::Urn;
 pub use anyhow::Result;
 use async_trait::async_trait;
 pub use deserialize::deserialize_state_field;
-use dyn_clone::DynClone as ResourceClone;
 pub use mashin_macro::resource;
 pub use provider_state::ProviderState;
 use serde::{Deserialize, Serialize};
@@ -63,8 +62,6 @@ impl ResourceResult {
     }
 }
 
-dyn_clone::clone_trait_object!(Resource);
-
 pub trait ResourceEq {
     // An &Any can be cast to a reference to a concrete type.
     fn as_any(&self) -> &dyn Any;
@@ -78,7 +75,7 @@ pub trait ResourceSerialize {
 }
 
 #[async_trait]
-pub trait Resource: ResourceClone + ResourceEq + ResourceSerialize {
+pub trait Resource: ResourceEq + ResourceSerialize {
     fn __default_with_params(name: &str, urn: &str) -> Self
     where
         Self: Sized;
