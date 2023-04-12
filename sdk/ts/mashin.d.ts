@@ -1,4 +1,5 @@
 import { Mashin } from "./mod.ts";
+import { Inputs, Outputs } from "./output.ts";
 
 export type StepFn = () => Promise<void>;
 export type StateRecord = Record<string, string>;
@@ -16,5 +17,13 @@ declare global {
     let rid: number | null;
     let engine: Mashin | null;
     let providers: ProviderList[];
+    class DynamicProvider {
+      constructor(name: string, path: string);
+    }
+    class DynamicResource {
+      constructor(urn: string, config: Inputs);
+
+      output(): Outputs;
+    }
   }
 }

@@ -1,4 +1,5 @@
 use crate::Result;
+use anyhow::anyhow;
 use std::{cmp::Ordering, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -27,6 +28,19 @@ impl Urn {
         let bytes_str = std::str::from_utf8(bytes)?;
         let urn = urn::Urn::from_str(bytes_str)?;
         Ok(Self(urn))
+    }
+
+    pub fn as_provider(&self) -> Result<String> {
+        let nss: Vec<&str> = self.nss().split(":").collect();
+        Ok(nss
+            .first()
+            .ok_or(anyhow!("invalid provider"))
+            .cloned()?
+            .to_string())
+    }
+
+    pub fn as_display(&self) -> String {
+        self.to_string().replace("urn:provider:", "")
     }
 
     pub fn as_str(&self) -> &str {

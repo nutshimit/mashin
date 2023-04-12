@@ -161,10 +161,22 @@ version = "0.1.0"
 dependencies = [
  "aws-config",
  "aws-sdk-s3",
+ "env_logger",
  "log",
  "mashin_sdk",
  "serde",
  "url",
+]
+
+[[package]]
+name = "atty"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9b39be18770d11421cdb1b9947a45dd3f37e93092cbf377614828a319d5fee8"
+dependencies = [
+ "hermit-abi 0.1.19",
+ "libc",
+ "winapi",
 ]
 
 [[package]]
@@ -1137,32 +1149,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 
 [[package]]
-name = "dynasm"
-version = "1.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "add9a102807b524ec050363f09e06f1504214b0e1c7797f64261c891022dce8b"
-dependencies = [
- "bitflags",
- "byteorder",
- "lazy_static",
- "proc-macro-error",
- "proc-macro2 1.0.56",
- "quote 1.0.26",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "dynasmrt"
-version = "1.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64fba5a42bd76a17cad4bfa00de168ee1cbfa06a5e8ce992ae880218c05641a9"
-dependencies = [
- "byteorder",
- "dynasm",
- "memmap2",
-]
-
-[[package]]
 name = "ed25519"
 version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1446,6 +1432,15 @@ name = "heck"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
+
+[[package]]
+name = "hermit-abi"
+version = "0.1.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62b467343b94ba476dcb2500d242dadbb39557df889310ac77c5d99100aaac33"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "hermit-abi"
@@ -1816,9 +1811,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "dialoguer",
  "env_logger",
  "log",
  "mashin_runtime",
+ "mashin_sdk",
  "tokio",
 ]
 
@@ -1829,31 +1826,20 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.21.0",
+ "deno_core",
+ "dlopen",
  "itertools",
- "mashin_ffi",
+ "libffi",
+ "log",
  "mashin_sdk",
  "quote 1.0.26",
+ "rkv",
  "serde",
  "serde_json",
  "sodiumoxide",
  "syn 1.0.109",
  "tokio",
  "url",
-]
-
-[[package]]
-name = "mashin_ffi"
-version = "0.1.0"
-dependencies = [
- "deno_core",
- "dlopen",
- "dynasmrt",
- "libffi",
- "serde",
- "serde-value",
- "serde_json",
- "tokio",
- "winapi",
 ]
 
 [[package]]
@@ -1870,6 +1856,7 @@ name = "mashin_runtime"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "atty",
  "deno_ast",
  "deno_console",
  "deno_core",
@@ -1878,14 +1865,17 @@ dependencies = [
  "deno_web",
  "deno_webidl",
  "deno_websocket",
- "dialoguer",
+ "dlopen",
  "libffi",
  "log",
  "mashin_core",
- "mashin_ffi",
+ "once_cell",
  "reqwest",
- "rkv",
+ "serde",
+ "serde-value",
+ "termcolor",
  "tokio",
+ "winapi",
 ]
 
 [[package]]
@@ -1894,6 +1884,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "env_logger",
+ "log",
  "mashin_macro",
  "serde",
  "serde_json",
@@ -1915,15 +1907,6 @@ name = "memchr"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
-
-[[package]]
-name = "memmap2"
-version = "0.5.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83faa42c0a078c393f6b29d5db232d8be22776a891f8f56e5284faee4a20b327"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "mime"

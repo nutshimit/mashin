@@ -5,8 +5,11 @@ const core = globalThis.Deno.core;
 import { globalScope } from "ext:mashin_core/98_global_scope.js";
 import { env } from "ext:mashin_core/30_os.js";
 import { errors } from "ext:mashin_core/01_errors.js";
+import { DynamicProvider, DynamicResource } from "ext:mashin_core/40_ffi.js";
 import DOMException from "ext:deno_web/01_dom_exception.js";
-import * as ffi from "ext:mashin_ffi/00_ffi.js";
+import * as util from "ext:mashin_core/06_util.js";
+// console
+import * as console from "ext:deno_console/02_console.js";
 
 // Set up global properties
 ObjectDefineProperties(globalThis, globalScope);
@@ -31,13 +34,23 @@ function bootstrapMainRuntime(runtimeOptions) {
     request: (perm) => {},
   };
 
-  // ffi
-  globalThis.Deno.dlopen = ffi.dlopen;
-  globalThis.Deno.UnsafeCallback = ffi.UnsafeCallback;
-  globalThis.Deno.UnsafePointer = ffi.UnsafePointer;
-  globalThis.Deno.UnsafePointerView = ffi.UnsafePointerView;
-  globalThis.Deno.UnsafeFnPointer = ffi.UnsafeFnPointer;
+  const consoleVoid = {
+    log: (..._data) => {},
+    warn: (..._data) => {},
+    trace: (..._data) => {},
+    debug: (..._data) => {},
+  };
 
+  // only display the console on first run
+  ObjectDefineProperties(globalThis, {
+    console: util.nonEnumerable(
+      runtimeOptions.isFirstRun
+        ? new console.Console((msg, level) =>
+            core.ops.as__client_print(msg, level > 1)
+          )
+        : new console.Console((_msg, _level) => {})
+    ),
+  });
   core.setBuildInfo(runtimeOptions.target);
 
   core.registerErrorClass("NotFound", errors.NotFound);
@@ -112,4 +125,6 @@ globalThis.__mashin = {
   rid: null,
   engine: null,
   providers: [],
+  DynamicProvider,
+  DynamicResource,
 };

@@ -1,6 +1,6 @@
-use crate::{js_log, log};
+use crate::{colors, js_log, log};
 use deno_core::{
-    error::{type_error, AnyError},
+    error::{bad_resource_id, type_error, AnyError},
     resolve_path,
     serde_json::{self, Value},
     OpState, Resource, ResourceId,
@@ -9,11 +9,11 @@ use libffi::middle::Arg;
 use mashin_core::{
     sdk::{
         ext::anyhow::{anyhow, bail},
-        ResourceAction, ResourceDiff, ResourceResult, Result, Urn,
+        ResourceAction, ResourceArgs, ResourceDiff, ResourceResult, Result, Urn,
     },
-    Client, ProviderInner, ProviderList, RawState,
+    BackendState, ExecutedResource, FileState, MashinEngine, ProviderInner, RawState,
+    RegisteredProvider,
 };
-use mashin_ffi::{DynamicLibraryResource, NativeType, NativeValue};
 use std::{
     alloc::{dealloc, Layout},
     cell::RefCell,
@@ -23,360 +23,235 @@ use std::{
     ptr,
     rc::Rc,
     str::FromStr,
+    sync::mpsc::{self, TryRecvError},
+    thread::{self, sleep},
+    time::{Duration, Instant},
 };
 
-use super::state::{BackendState, FileState};
+use deno_core::error::generic_error;
+use dlopen::raw::Library;
+use mashin_core::{DynamicLibraryResource, ForeignFunction, NativeType, NativeValue, Symbol};
+use serde::Deserialize;
 
-// `Mashin` `try_default`
+// only call if we want to overwrite the backend
 #[deno_core::op]
 pub(crate) async fn as__client_new(
     op_state: Rc<RefCell<OpState>>,
     backend_rid: Option<ResourceId>,
-) -> Result<ResourceId> {
-    log!(info, "Engine is starting up...");
-
-    let mut op_state = op_state.borrow_mut();
-
-    log!(info, "Getting state lock...");
-    let backend = Box::new({
-        if let Some(backend_rid) = backend_rid {
-            // should be handled by ffi
-            todo!()
-        } else {
-            let path = resolve_path(".mashin", current_dir()?.as_path())?
-                .to_file_path()
-                .or_else(|_| bail!("unable to resolve state dir"))?;
-            // create new file   state
-            BackendState::Local(FileState::new(path)?)
-        }
-    });
-    let backend_pointer = Box::into_raw(backend) as *mut c_void;
-
-    log!(info, "Engine launched successfully");
-
-    let rid = op_state
-        .resource_table
-        .add(MashinClient::new(backend_pointer, b"mysuperpassword").await?);
-
-    op_state.put(MashinState::default());
-    Ok(rid)
-}
-
-#[deno_core::op]
-pub(crate) async fn as__client_apply(
-    op_state: Rc<RefCell<OpState>>,
-    client_rid: ResourceId,
-    providers_map: Vec<(String, ResourceId)>,
 ) -> Result<()> {
-    let mut op_state = op_state.borrow_mut();
-    let mashin_client = op_state.resource_table.get::<MashinClient>(client_rid)?;
-
-    let backend = unsafe {
-        let handler = mashin_client.0.state_handler as *mut BackendState;
-        &*handler
-    };
-
-    // prepare all resource
-    let mut providers_by_name = HashMap::new();
-    for (provider_name, provider_rid) in providers_map {
-        let symbols = {
-            let resource = op_state
-                .resource_table
-                .get::<DynamicLibraryResource>(provider_rid)?;
-            resource
-                .symbols
-                .get("run")
-                .ok_or(anyhow!("invalid function"))?
-                .clone()
-        };
-        providers_by_name.insert(provider_name, (provider_rid, symbols));
-    }
-
-    let resources_in_storage = backend.resources().await?;
-    let mashin_state = op_state.borrow_mut::<MashinState>();
-
-    // delete all resource that are missing
-    let mut to_delete = Vec::new();
-    for res in resources_in_storage {
-        if !mashin_state.executed_resource.contains_key(&res) {
-            to_delete.push(res);
-        }
-    }
-
-    // all executed resource previously
-    let mut to_update = Vec::new();
-    let mut to_create = Vec::new();
-    for (urn, diff) in &mashin_state.executed_resource {
-        // already exist
-        if mashin_state.executed_resource.contains_key(&urn) {
-            to_update.push((urn, diff));
-        }
-        // should create
-        else {
-            to_create.push((urn, diff));
-        }
-    }
-
-    log!(warn, "You have {} resources to delete", to_delete.len());
-    log!(info, "You have {} resources to create", to_create.len());
-    log!(info, "You have {} resources to update", to_update.len());
-
-    if dialoguer::Confirm::new()
-        .with_prompt("\nAre you sure you want to continue?")
-        .interact()?
-    {
-        for urn in to_delete {
-            let parsed_urn = ParsedResourceUrn::try_from(urn.clone())?;
-            let (provider_rid, run_symbol) = providers_by_name.get(&parsed_urn.provider).ok_or(
-                anyhow!("invalid provider, make sure to initialize it before"),
-            )?;
-
-            let provider_in_state = mashin_state
-                .get_provider_by_rid(provider_rid)
-                .ok_or(anyhow!("invalid provider"))?;
-
-            let diff_pointer = Box::into_raw(Box::new(ResourceDiff::default())) as *mut c_void;
-            let urn_pointer = Box::into_raw(Box::new(urn.clone())) as *mut c_void;
-            let action_pointer = Box::into_raw(Box::new(ResourceAction::Delete)) as *mut c_void;
-            let empty_state_pointer = Box::into_raw(Box::new(Value::default())) as *mut c_void;
-            let empty_config_pointer = Box::into_raw(Box::new(Value::default())) as *mut c_void;
-
-            unsafe {
-                let call_args = vec![
-                    NativeValue {
-                        pointer: provider_in_state.provider,
-                    }
-                    .as_arg(&NativeType::Pointer),
-                    NativeValue {
-                        pointer: urn_pointer,
-                    }
-                    .as_arg(&NativeType::Pointer),
-                    NativeValue {
-                        pointer: empty_state_pointer,
-                    }
-                    .as_arg(&NativeType::Pointer),
-                    NativeValue {
-                        pointer: empty_config_pointer,
-                    }
-                    .as_arg(&NativeType::Pointer),
-                    NativeValue {
-                        pointer: action_pointer,
-                    }
-                    .as_arg(&NativeType::Pointer),
-                    // diff is only used on update
-                    NativeValue {
-                        pointer: diff_pointer,
-                    }
-                    .as_arg(&NativeType::Pointer),
-                ];
-
-                // execute the ffi run() function for this provider with arguments
-                // defined above
-                let provider_state = run_symbol
-                    .cif
-                    .call::<*mut ResourceResult>(run_symbol.ptr, &call_args);
-
-                // drop the provider state and use the cloned state above instead
-                ptr::drop_in_place(provider_state);
-                dealloc(provider_state as *mut u8, Layout::new::<ResourceResult>());
-            };
-
-            log!(info, "Resource deleted: {}", urn);
-            backend.delete(&urn).await?;
-        }
-    } else {
-        log!(
-            info,
-            "Your job has been cancelled! Nothing has been saved to the state."
-        );
-    }
-
     Ok(())
 }
 
-// run in dry run mode and register the current state then we can compare
-// in `as__client_apply` for all resources and then apply only the changes
-// we want
+#[derive(Deserialize, Debug)]
+pub struct ResourceExecuteArgs {
+    urn: String,
+    config: serde_json::Value,
+}
+
 #[deno_core::op]
-pub(crate) async fn as__runtime__provider__dry_run(
-    rc_op_state: Rc<RefCell<OpState>>,
-    client_rid: ResourceId,
-    provider_rid: ResourceId,
-    urn_str: String,
-    config_raw: serde_json::Value,
+pub(crate) fn as__runtime__resource_execute(
+    op_state: &mut OpState,
+    args: ResourceExecuteArgs,
 ) -> Result<serde_json::Value> {
-    log!(info, "Refreshing {}...", urn_str);
+    let mashin = op_state.borrow_mut::<MashinEngine>();
+    let mut executed_resouces = mashin.executed_resources.borrow_mut();
+
+    // resource config
+    let raw_config = Rc::new(args.config);
 
     // the URN of the resource
     // urn:mashin:aws:s3:bucket/?=mysuper_bucket
     // q_component is the resource name
-    let urn = Urn::from_str(&urn_str)?;
+    let urn = Rc::new(Urn::from_str(&args.urn)?);
+    let provider_name = urn.as_provider()?;
+    let display_urn = urn.as_display();
 
-    // op state to read the resource_table and in read only mode
-    let rc_op_state_read_only = rc_op_state.clone();
-    let mut op_state = rc_op_state_read_only.borrow_mut();
-    let mashin_client = op_state.resource_table.get::<MashinClient>(client_rid)?;
+    let already_executed_resource = executed_resouces.get(&urn);
+    let expected_resource_action =
+        if let Some(already_executed_resource) = already_executed_resource {
+            already_executed_resource
+                .required_change
+                .clone()
+                .unwrap_or(ResourceAction::Get)
+        } else {
+            ResourceAction::Get
+        };
 
-    // grab the run symbol for this resource before we borrow the mashin state as mutable
-    let run_symbol = {
-        let resource = op_state
-            .resource_table
-            .get::<DynamicLibraryResource>(provider_rid)?;
-        let symbols = &resource.symbols;
-        *symbols
-            .get("run")
-            .ok_or_else(|| type_error("Invalid FFI symbol name"))?
-            .clone()
-    };
+    let start = Instant::now();
+    let present_participe_action = expected_resource_action
+        .action_present_participe_str()
+        .to_string();
 
-    // get the current mashin state as mutable
-    let mashin_state = op_state.borrow_mut::<MashinState>();
-
-    // backend engine (to save and get current encrypted state for this resource)
-    let backend = unsafe {
-        let handler = mashin_client.0.state_handler as *mut BackendState;
-        &*handler
-    };
-
-    // get the current provider registered in `as__runtime__register_provider__allocate`
-    // we can get the FFI pointer from the mashin_ffi ext
-    let provider_in_state = mashin_state
-        .get_provider_by_rid(&provider_rid)
-        .ok_or(anyhow!("invalid provider"))?;
-
-    let current_resource_state = Rc::new(
-        backend
-            .get(&urn)
-            .await?
-            .map(|s| s.decrypt(&mashin_client.0.key))
-            .map_or(Ok(None), |v| v.map(Some))?
-            .unwrap_or_default(),
+    log!(
+        info,
+        "[{}]: {}...",
+        colors::bold(&display_urn),
+        &present_participe_action,
     );
 
-    // setup pointers, see the `pointers_cleanup` that get run when the dry run is finished
-    let current_resource_state_pointer =
-        Rc::into_raw(current_resource_state.clone()) as *mut c_void;
-    let config_pointer = Box::into_raw(Box::new(config_raw)) as *mut c_void;
-    let urn_pointer = Box::into_raw(Box::new(urn.clone())) as *mut c_void;
-    let action_pointer = Box::into_raw(Box::new(ResourceAction::Get)) as *mut c_void;
-    let empty_diff_pointer = Box::into_raw(Box::new(ResourceDiff::default())) as *mut c_void;
+    let backend = mashin.state_handler.borrow();
+    let providers = mashin.providers.borrow();
 
-    // if you need to add a pointer above, make sure it get added in the
-    // cleanup function below as well
-    let pointers_cleanup = || unsafe {
-        // drop the urn
-        ptr::drop_in_place(urn_pointer);
-        dealloc(urn_pointer as *mut u8, Layout::new::<Urn>());
+    let provider = providers
+        .get(&provider_name)
+        .ok_or(anyhow!("provider initialized"))?;
 
-        // drop the action
-        ptr::drop_in_place(action_pointer);
-        dealloc(action_pointer as *mut u8, Layout::new::<ResourceAction>());
+    let raw_state = Rc::new(RefCell::new(
+        backend
+            .get(&urn)?
+            .map(|s| s.decrypt(&mashin.key))
+            .map_or(Ok(None), |v| v.map(Some))?
+            .unwrap_or_default()
+            .inner()
+            .clone(),
+    ));
 
-        // drop the empty_diff
-        ptr::drop_in_place(empty_diff_pointer);
-        dealloc(empty_diff_pointer as *mut u8, Layout::new::<ResourceDiff>());
+    let args_pointer = Rc::into_raw(Rc::new(ResourceArgs {
+        action: Rc::new(expected_resource_action.clone()),
+        raw_config,
+        raw_state: raw_state.clone(),
+        urn: urn.clone(),
+    }));
+
+    // launch a new thread to display the log if it take more than 5 seconds
+    // eg; aws:s3:bucket?=test1234atmos001: Refreshing... 10s
+    let (tx, rx) = mpsc::channel();
+    let isolated_urn = colors::bold(display_urn.clone());
+    thread::spawn(move || loop {
+        sleep(Duration::from_secs(5));
+
+        match rx.try_recv() {
+            Ok(_) | Err(TryRecvError::Disconnected) => {
+                break;
+            }
+            Err(TryRecvError::Empty) => {}
+        };
+
+        log!(
+            info,
+            "[{isolated_urn}]: {}... {}s",
+            present_participe_action.clone(),
+            start.elapsed().as_secs()
+        );
+    });
+
+    // call the function
+    let provider_state = provider
+        .dylib
+        .call_resource(provider.ptr, args_pointer as *mut c_void)?;
+
+    // close the log thread
+    tx.send(())?;
+
+    // grab the raw state from the provider job run previously
+    let new_state = unsafe {
+        let state = Rc::from_raw(provider_state);
+        state.inner().into()
     };
+    // take the current state to compare with the new one
+    let current_state = raw_state.as_ref().take().into();
 
-    let state: RawState = unsafe {
-        let call_args = vec![
-            NativeValue {
-                pointer: provider_in_state.provider,
-            }
-            .as_arg(&NativeType::Pointer),
-            NativeValue {
-                pointer: urn_pointer,
-            }
-            .as_arg(&NativeType::Pointer),
-            NativeValue {
-                pointer: current_resource_state_pointer,
-            }
-            .as_arg(&NativeType::Pointer),
-            NativeValue {
-                pointer: config_pointer,
-            }
-            .as_arg(&NativeType::Pointer),
-            NativeValue {
-                pointer: action_pointer,
-            }
-            .as_arg(&NativeType::Pointer),
-            // diff is only used on update
-            NativeValue {
-                pointer: empty_diff_pointer,
-            }
-            .as_arg(&NativeType::Pointer),
-        ];
+    // this is the first run
+    if already_executed_resource.is_none() {
+        let executed_resource = ExecutedResource::new(
+            provider_name,
+            //args,
+            &current_state,
+            &new_state,
+        );
 
-        // execute the ffi run() function for this provider with arguments
-        // defined above
-        let provider_state = run_symbol
-            .cif
-            .call::<*mut ResourceResult>(run_symbol.ptr, &call_args);
-        let state = &mut *provider_state;
-        let clone_state = state.clone();
+        executed_resouces.insert(&urn, executed_resource);
+    } else {
+        executed_resouces.remove(&urn);
+    }
 
-        // drop the provider state and use the cloned state above instead
-        ptr::drop_in_place(provider_state);
-        dealloc(provider_state as *mut u8, Layout::new::<ResourceResult>());
+    log!(
+        info,
+        "[{}]: {} complete after {}s",
+        colors::bold(&display_urn),
+        expected_resource_action.action_present_str(),
+        start.elapsed().as_secs()
+    );
 
-        clone_state.inner().into()
-    };
+    Ok(new_state.generate_ts_output())
+}
 
-    // Insert the diff
-    let diff = state.compare_with(&current_resource_state, None, false);
-
-    let executed_resource = ResourcePending {
-        provider: provider_in_state.provider,
-        config: config_pointer,
-        current_state: current_resource_state_pointer,
-        diff,
-    };
-
-    mashin_state
-        .executed_resource
-        .insert(urn, executed_resource);
-
-    pointers_cleanup();
-
-    Ok(state.generate_ts_output())
+#[derive(Deserialize, Debug)]
+pub struct ProviderLoadArgs {
+    name: String,
+    path: String,
+    symbols: HashMap<String, ForeignFunction>,
 }
 
 #[deno_core::op]
-pub(crate) async fn as__runtime__register_provider__allocate(
-    rc_op_state: Rc<RefCell<OpState>>,
-    provider_rid: ResourceId, // should be registered with ffi first
-    provider_name: String,
+pub fn as__runtime__register_provider__allocate(
+    op_state: &mut OpState,
+    args: ProviderLoadArgs,
 ) -> Result<()> {
-    let get_symbol = |fn_name: &str| {
-        let op_state = rc_op_state.borrow_mut();
-        let resource = op_state
-            .resource_table
-            .get::<DynamicLibraryResource>(provider_rid)
-            .expect("valid dylib");
-        let symbols = &resource.symbols;
-        *symbols.get(fn_name).expect("valid symbol").clone()
+    let path = args.path;
+    let provider_name = args.name;
+
+    let mashin = op_state.borrow_mut::<MashinEngine>();
+    let mut providers = mashin.providers.borrow_mut();
+
+    let lib = Library::open(&path).map_err(|e| {
+        dlopen::Error::OpeningLibraryError(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            super::ffi::format_error(e, path),
+        ))
+    })?;
+    let mut resource = DynamicLibraryResource {
+        lib,
+        symbols: HashMap::new(),
     };
-    // symbol of the `drop` function in the provider ffi
-    let drop_symbol = get_symbol("drop");
-    // symbol of the `new` function in the provider ffi
-    let symbol = get_symbol("new");
 
-    // create the new provider (calling new)
-    let call_args: Vec<Arg> = Vec::new();
-    let provider_pointer = unsafe { symbol.cif.call::<*mut c_void>(symbol.ptr, &call_args) };
-
-    let mut op_state = rc_op_state.borrow_mut();
-    let client = op_state.borrow_mut::<MashinState>();
-
-    if client.providers.get(&provider_rid).is_none() {
-        client.providers.insert(
-            provider_rid,
-            ProviderInner {
-                name: provider_name,
-                provider: provider_pointer,
-                drop_fn: drop_symbol,
-            },
+    for (symbol_key, foreign_fn) in args.symbols {
+        let symbol = match &foreign_fn.name {
+            Some(symbol) => symbol,
+            None => &symbol_key,
+        };
+        // By default, Err returned by this function does not tell
+        // which symbol wasn't exported. So we'll modify the error
+        // message to include the name of symbol.
+        let fn_ptr =
+        // SAFETY: The obtained T symbol is the size of a pointer.
+        match unsafe { resource.lib.symbol::<*const c_void>(symbol) } {
+            Ok(value) => Ok(value),
+            Err(err) => Err(generic_error(format!(
+            "Failed to register symbol {symbol}: {err}"
+            ))),
+        }?;
+        let ptr = libffi::middle::CodePtr::from_ptr(fn_ptr as _);
+        let cif = libffi::middle::Cif::new(
+            foreign_fn
+                .parameters
+                .clone()
+                .into_iter()
+                .map(libffi::middle::Type::try_from)
+                .collect::<Result<Vec<_>, _>>()?,
+            foreign_fn.result.clone().try_into()?,
         );
+
+        let sym = Box::new(Symbol {
+            cif,
+            ptr,
+            parameter_types: foreign_fn.parameters,
+            result_type: foreign_fn.result,
+        });
+
+        resource.symbols.insert(symbol_key, sym.clone());
     }
+
+    // create new provider pointer
+
+    let provider_pointer = resource.call_new()?;
+
+    let registered_provider = RegisteredProvider {
+        dylib: resource,
+        ptr: provider_pointer,
+    };
+
+    providers.insert(provider_name, registered_provider);
 
     Ok(())
 }
@@ -416,76 +291,7 @@ pub(crate) fn op_decls() -> Vec<::deno_core::OpDecl> {
         op_get_env::decl(),
         as__client_print::decl(),
         as__client_new::decl(),
-        as__client_apply::decl(),
         as__runtime__register_provider__allocate::decl(),
-        as__runtime__provider__dry_run::decl(),
+        as__runtime__resource_execute::decl(),
     ]
-}
-
-pub(crate) struct ResourcePending {
-    provider: *mut c_void,
-    current_state: *mut c_void,
-    config: *mut c_void,
-    diff: ResourceDiff,
-}
-
-// Re export client  to be able
-// to impl Resource on it
-pub(crate) struct MashinClient(pub Client);
-
-impl MashinClient {
-    pub async fn new(backend_pointer: *mut c_void, passphrase: &[u8]) -> Result<Self> {
-        Ok(Self(Client::new(backend_pointer, passphrase).await?))
-    }
-}
-
-impl Resource for MashinClient {} // Blank impl
-
-#[derive(Default)]
-pub struct MashinState {
-    providers: ProviderList,
-    executed_resource: BTreeMap<Urn, ResourcePending>,
-    rid: ResourceId,
-}
-
-impl MashinState {
-    pub fn get_provider_by_rid(&self, rid: &ResourceId) -> Option<ProviderInner> {
-        self.providers.get(rid).cloned()
-    }
-}
-
-// drop all providers alloc
-impl Drop for MashinState {
-    fn drop(&mut self) {
-        let drop_provider = |(_, inner): (_, &ProviderInner)| {
-            unsafe {
-                let call_args = vec![NativeValue {
-                    pointer: inner.provider,
-                }
-                .as_arg(inner.drop_fn.parameter_types.get(0).unwrap())];
-                inner.drop_fn.cif.call::<()>(inner.drop_fn.ptr, &call_args);
-            };
-        };
-        self.providers.iter().for_each(drop_provider)
-    }
-}
-
-pub struct ParsedResourceUrn {
-    provider: String,
-    urn: Urn,
-}
-
-impl TryFrom<Urn> for ParsedResourceUrn {
-    type Error = AnyError;
-
-    fn try_from(urn: Urn) -> std::result::Result<Self, Self::Error> {
-        let nss: Vec<&str> = urn.nss().split(":").collect();
-        let provider = nss
-            .first()
-            .ok_or(anyhow!("invalid provider"))
-            .cloned()?
-            .to_string();
-
-        Ok(Self { provider, urn })
-    }
 }

@@ -15,5 +15,7 @@ serde.workspace = true
 anyhow.workspace = true
 mashin_macro.workspace = true
 tokio.workspace = true
+log.workspace = true
+env_logger.workspace = true
 
 urn = "0.5.1"

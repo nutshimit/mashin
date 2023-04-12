@@ -45,27 +45,9 @@ export interface ResourceOptions {
 }
 
 export abstract class Provider extends Base {
-  #rid: number;
-
-  constructor(rid: number, name: string, props: Inputs = {}) {
+  constructor(name: string, path: string, props: Inputs = {}) {
     super(name, props);
-    this.#rid = rid;
-  }
-
-  get rid() {
-    return this.#rid;
-  }
-
-  async setup() {
-    await Deno.core.opAsync(
-      "as__runtime__register_provider__allocate",
-      this.#rid,
-      this.name
-    );
-
-    globalThis.__mashin.providers.push([this.name, this.#rid]);
-
-    return this;
+    new __mashin.DynamicProvider(name, path);
   }
 }
 
@@ -94,17 +76,8 @@ export abstract class Resource<
     this.#urn = `urn:provider:${opts.provider.name}:${this.#module}:${
       this.#resource_type
     }?=${name}`;
-  }
 
-  async create() {
-    this.#output = await Deno.core.opAsync(
-      "as__runtime__provider__dry_run",
-      globalThis.__mashin.rid,
-      this.#opts.provider.rid,
-      this.#urn,
-      this.props
-    );
-    return this;
+    this.#output = new __mashin.DynamicResource(this.#urn, props).output() as O;
   }
 
   get opts() {

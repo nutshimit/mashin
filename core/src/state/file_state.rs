@@ -1,10 +1,12 @@
-use mashin_core::{
+use crate::{
     sdk::{
         ext::{anyhow::bail, async_trait::async_trait, serde_json},
         Result, Urn,
     },
-    EncryptedState, StateHandler, StateInner,
+    EncryptedState, StateHandler,
 };
+use anyhow::anyhow;
+use deno_core::resolve_path;
 use std::{
     collections::BTreeSet,
     env::current_dir,
@@ -16,44 +18,33 @@ use std::{
 use rkv::backend::{SafeMode, SafeModeEnvironment};
 use rkv::{Manager, Rkv, StoreOptions};
 
-pub enum BackendState {
-    Local(FileState),
-    Plugin(StateInner),
-}
-
-impl BackendState {
-    pub async fn save(&self, urn: &Urn, state: &EncryptedState) -> Result<()> {
-        match self {
-            BackendState::Local(local) => local.save(&urn, state).await,
-            BackendState::Plugin(_) => todo!(),
-        }
-    }
-
-    pub async fn get(&self, urn: &Urn) -> Result<Option<EncryptedState>> {
-        match self {
-            BackendState::Local(local) => local.get(&urn).await,
-            BackendState::Plugin(_) => todo!(),
-        }
-    }
-
-    pub async fn resources(&self) -> Result<BTreeSet<Urn>> {
-        match self {
-            BackendState::Local(local) => local.resources().await,
-            BackendState::Plugin(_) => todo!(),
-        }
-    }
-
-    pub async fn delete(&self, urn: &Urn) -> Result<()> {
-        match self {
-            BackendState::Local(local) => local.delete(urn).await,
-            BackendState::Plugin(_) => todo!(),
-        }
-    }
-}
-
 pub struct FileState {
     path: PathBuf,
     db: Arc<RwLock<Rkv<SafeModeEnvironment>>>,
+}
+
+impl std::fmt::Debug for FileState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FileState")
+            .field("path", &self.path)
+            .field("db", &self.db)
+            .finish()
+    }
+}
+
+impl Default for FileState {
+    fn default() -> Self {
+        let path = resolve_path(
+            ".mashin",
+            current_dir().expect("valid current dir").as_path(),
+        )
+        .expect("valid path")
+        .to_file_path()
+        .expect("valid local path");
+
+        let db = Self::new(path.clone()).expect("valid init").db;
+        Self { path, db }
+    }
 }
 
 impl FileState {
@@ -69,18 +60,9 @@ impl FileState {
     }
 }
 
-impl std::fmt::Debug for FileState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FileState")
-            .field("path", &self.path)
-            .field("db", &self.db)
-            .finish()
-    }
-}
-
 #[async_trait]
 impl StateHandler for FileState {
-    async fn get(&self, urn: &Urn) -> Result<Option<EncryptedState>> {
+    fn get(&self, urn: &Urn) -> Result<Option<EncryptedState>> {
         let env = self.db.read().or_else(|_| bail!("unable to get env"))?;
         let store = env.open_single("state", StoreOptions::create())?;
         let reader = env.read()?;
@@ -99,7 +81,7 @@ impl StateHandler for FileState {
         })
     }
 
-    async fn save(&self, urn: &Urn, state: &EncryptedState) -> Result<()> {
+    fn save(&self, urn: &Urn, state: &EncryptedState) -> Result<()> {
         let env = self.db.read().or_else(|_| bail!("unable to get env"))?;
         let store = env.open_single("state", StoreOptions::create())?;
         let mut writer = env.write()?;
@@ -111,7 +93,7 @@ impl StateHandler for FileState {
         writer.commit().map_err(Into::into)
     }
 
-    async fn resources(&self) -> Result<BTreeSet<Urn>> {
+    fn resources(&self) -> Result<BTreeSet<Urn>> {
         let env = self.db.read().or_else(|_| bail!("unable to get env"))?;
         let store = env.open_single("state", StoreOptions::create())?;
         let reader = env.read()?;
@@ -125,7 +107,7 @@ impl StateHandler for FileState {
         Ok(all_resources)
     }
 
-    async fn delete(&self, urn: &Urn) -> Result<()> {
+    fn delete(&self, urn: &Urn) -> Result<()> {
         let env = self.db.read().or_else(|_| bail!("unable to get env"))?;
         let store = env.open_single("state", StoreOptions::create())?;
         let mut writer = env.write()?;

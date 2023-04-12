@@ -1,4 +1,4 @@
-use super::{diff::compare_raw_state_recursive, trim_sensitive};
+use super::{diff::diff, trim_sensitive, StateDiff};
 use crate::{
     sdk::{
         ext::{
@@ -17,7 +17,7 @@ use crate::{
 use base64::{engine::general_purpose, Engine as _};
 use mashin_sdk::ResourceDiff;
 use sodiumoxide::crypto::{pwhash, secretbox};
-use std::{collections::BTreeSet, fmt};
+use std::{cell::RefCell, collections::BTreeSet, fmt, path::PathBuf, rc::Rc};
 
 #[derive(Serialize, Deserialize)]
 pub enum ProjectState {
@@ -126,8 +126,16 @@ impl RawState {
         trim_sensitive::trim_sensitive_fields(&self.0)
     }
 
-    pub fn compare_with(&self, b: &RawState, path: Option<&str>, in_value: bool) -> ResourceDiff {
-        ResourceDiff::new(compare_raw_state_recursive(&self.0, &b.0, path, in_value))
+    pub fn compare_with(&self, b: &Self) -> StateDiff {
+        diff(self.inner().clone(), b.inner().clone())
+    }
+
+    pub fn inner(&self) -> &serde_json::Value {
+        &self.0
+    }
+
+    pub fn is_null(&self) -> bool {
+        self.0.is_null()
     }
 }
 
@@ -161,12 +169,11 @@ impl From<serde_json::Value> for RawState {
     }
 }
 
-#[async_trait]
 pub trait StateHandler {
-    async fn save(&self, urn: &Urn, state: &EncryptedState) -> Result<()>;
-    async fn get(&self, urn: &Urn) -> Result<Option<EncryptedState>>;
-    async fn delete(&self, urn: &Urn) -> Result<()>;
-    async fn resources(&self) -> Result<BTreeSet<Urn>>;
+    fn save(&self, urn: &Urn, state: &EncryptedState) -> Result<()>;
+    fn get(&self, urn: &Urn) -> Result<Option<EncryptedState>>;
+    fn delete(&self, urn: &Urn) -> Result<()>;
+    fn resources(&self) -> Result<BTreeSet<Urn>>;
 }
 
 pub(crate) fn derive_key(passphrase: &[u8], salt: pwhash::Salt) -> Result<secretbox::Key> {

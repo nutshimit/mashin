@@ -1,6 +1,5 @@
 import * as resource from "../../../sdk/ts/resource.ts";
 import { Inputs, Input, Output } from "../../../sdk/ts/output.ts";
-import { lib } from "./ffi.ts";
 
 export class Provider extends resource.Provider {
   constructor(name: string, args?: ProviderArgs) {
@@ -8,7 +7,8 @@ export class Provider extends resource.Provider {
 
     resourceInputs["accessKey"] = args?.accessKey;
 
-    super(lib.rid(), name, resourceInputs);
+    // FIXME: have dynamic provider path for each OS
+    super(name, "./target/debug/libtest.dylib", resourceInputs);
   }
 }
 

@@ -2,30 +2,7 @@
 
 import { StateRecord } from "./mashin.d.ts";
 
-export class Mashin {
-  get resourceId() {
-    return globalThis.__mashin.rid;
-  }
-
-  async setup(backend?: number) {
-    if (globalThis.__mashin.rid) {
-      throw new Error("Engine already started");
-    }
-    globalThis.__mashin.rid = await Deno.core.opAsync(
-      "as__client_new",
-      backend
-    );
-    globalThis.__mashin.engine = this;
-  }
-
-  async apply() {
-    await Deno.core.opAsync(
-      "as__client_apply",
-      globalThis.__mashin.rid,
-      globalThis.__mashin.providers
-    );
-  }
-}
+export class Mashin {}
 
 export abstract class Backend<T> {
   abstract name: string;

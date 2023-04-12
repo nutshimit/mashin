@@ -1,31 +1,38 @@
 use anyhow::{anyhow, bail, Result};
+pub use colors::*;
 use deno_ast::{MediaType, ParseParams, SourceTextInfo};
-use deno_core::error::AnyError;
-use deno_core::futures::channel::oneshot::Receiver;
 use deno_core::futures::FutureExt;
 use deno_core::serde_json::json;
 use deno_core::{
     include_js_files, resolve_import, resolve_path, Extension, JsRuntime, ModuleCode, ModuleLoader,
-    ModuleSource, ModuleSourceFuture, ModuleSpecifier, ModuleType, OpDecl, ResolutionKind,
+    ModuleSource, ModuleSourceFuture, ModuleSpecifier, ModuleType, OpDecl, OpState, ResolutionKind,
     RuntimeOptions,
 };
 use deno_fetch::FetchPermissions;
 use deno_web::BlobStore;
 use deno_web::TimersPermission;
 use deno_websocket::WebSocketPermissions;
+pub use mashin_core::sdk::{ResourceAction, Urn};
+pub use mashin_core::ExecutedResource;
+use mashin_core::{BackendState, ExecutedResources, MashinEngine};
 use reqwest::Url;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env::current_dir;
+use std::ffi::c_void;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::rc::Rc;
+
 mod builtin;
+mod colors;
 
 #[macro_export]
 macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
 		log::$level!(
-			target: "mashin::core",
+			target: "mashin::runtime",
             $patter $(, $values)*
 		)
 	};
@@ -73,12 +80,6 @@ impl WebSocketPermissions for AllowAllPermissions {
     }
 }
 
-impl mashin_ffi::FfiPermissions for AllowAllPermissions {
-    fn check(&mut self, _path: Option<&Path>) -> Result<(), deno_core::error::AnyError> {
-        Ok(())
-    }
-}
-
 pub struct Runtime {
     runtime: JsRuntime,
     main_module: String,
@@ -86,8 +87,12 @@ pub struct Runtime {
     raw_args: Vec<String>,
 }
 
+pub struct RuntimeResult {
+    pub executed_resources: Rc<RefCell<ExecutedResources>>,
+}
+
 pub enum RuntimeCommand {
-    Run { dry_run: bool },
+    Run,
     Destroy,
 }
 
@@ -106,20 +111,33 @@ impl DerefMut for Runtime {
 }
 
 impl Runtime {
-    pub fn new(main_module: &str, command: RuntimeCommand, raw_args: Vec<String>) -> Self {
+    pub fn new(
+        main_module: &str,
+        command: RuntimeCommand,
+        raw_args: Vec<String>,
+        executed_resources: Option<Rc<RefCell<ExecutedResources>>>,
+    ) -> Result<Self> {
+        let is_first_run = executed_resources.is_none();
         let extension = Extension::builder("mashin_core")
             .esm(include_js_files!(
                 mashin_core dir "js",
                 "01_errors.js",
                 "06_util.js",
                 "30_os.js",
+                "40_ffi.js",
                 "98_global_scope.js",
                 "99_main.js",
             ))
             .ops(stdlib())
             .state(move |state| {
+                // fixme: init in cli?
+                let backend = Rc::new(RefCell::new(BackendState::default()));
+                state.put(
+                    MashinEngine::new(backend, b"mysuperpassword", executed_resources)
+                        .expect("test"),
+                );
+
                 state.put(AllowAllPermissions {});
-                state.put(mashin_ffi::Unstable(true));
             })
             .build();
 
@@ -138,9 +156,6 @@ impl Runtime {
                         ..Default::default()
                     },
                 ),
-                mashin_ffi::mashin_ffi::init_ops_and_esm::<AllowAllPermissions>(
-                    true, // not unstable
-                ),
                 extension,
             ],
             module_loader: Some(Rc::new(TypescriptModuleLoader)),
@@ -148,34 +163,60 @@ impl Runtime {
             ..Default::default()
         });
 
-        Self {
+        let mut runtime = Self {
             command,
             main_module: main_module.to_string(),
             runtime,
             raw_args,
-        }
+        };
+
+        // bootstrap the engine
+        runtime.bootstrap(is_first_run)?;
+        Ok(runtime)
     }
 
-    pub async fn run(&mut self) -> Result<()> {
-        // bootstrap the engine
-        self.bootstrap()?;
+    pub async fn run(&mut self) -> Result<RuntimeResult> {
+        match self.command {
+            RuntimeCommand::Run => {
+                self.run_main_module().await?;
+            }
+            RuntimeCommand::Destroy => todo!(),
+        };
 
-        // dry run, get state of all resources
-        // from each providers and save into the gothamstate
-        self.dry_run().await?;
+        let rc_op_state = self.runtime.op_state();
+        let op_state = rc_op_state.borrow();
+        let engine = op_state.borrow::<MashinEngine>();
+        let executed_resources_rc = engine.executed_resources.clone();
 
-        // compare with current local state
-        // and apply pending changes
-        self.apply().await
+        let all_resources_in_state = engine.state_handler.borrow().resources()?;
+        let mut executed_resources = executed_resources_rc.borrow_mut();
+
+        for urn in &all_resources_in_state {
+            if !executed_resources.contains_key(urn) {
+                executed_resources.insert(
+                    urn,
+                    ExecutedResource {
+                        diff: None,
+                        provider: urn.as_provider()?,
+                        required_change: Some(ResourceAction::Delete),
+                    },
+                );
+            }
+        }
+
+        Ok(RuntimeResult {
+            executed_resources: executed_resources_rc.clone(),
+        })
     }
 
     // trigger `bootstrapMainRuntime` in `js/99_main.js`
-    fn bootstrap(&mut self) -> Result<()> {
+    fn bootstrap(&mut self, is_first_run: bool) -> Result<()> {
         self.runtime.execute_script(
-            "file:///__bootstrap.js",
+            "file://__bootstrap.js",
             format!(
                 r#"globalThis.bootstrap.mainRuntime({})"#,
                 json!({
+                    "isFirstRun": is_first_run,
                     // allow parsing env with Deno.args
                     "args": self.raw_args,
                     // allow target with Deno.env
@@ -187,38 +228,12 @@ impl Runtime {
     }
 
     // run the main module, evaluating each resource
-    async fn dry_run(&mut self) -> Result<()> {
+    async fn run_main_module(&mut self) -> Result<()> {
         let main_module = resolve_path(&self.main_module, current_dir()?.as_path())?;
         let mod_id = self.runtime.load_main_module(&main_module, None).await?;
         let result_main = self.runtime.mod_evaluate(mod_id);
         self.runtime.run_event_loop(false).await?;
         result_main.await?
-    }
-
-    // trigger the `as__client_apply` ops
-    async fn apply(&mut self) -> Result<()> {
-        let specifier = deno_core::resolve_url(&format!("file:///__apply.js"))?;
-        let mod_id = self
-            .runtime
-            .load_side_module(
-                &specifier,
-                Some(
-                    r#"
-                    if (!globalThis.__mashin) {
-                        throw new Error("Mashin engine not initialized")
-                    }
-                    await globalThis.__mashin.engine.apply();
-                    "#
-                    .into(),
-                ),
-            )
-            .await?;
-
-        let mod_evaluate = self.runtime.mod_evaluate(mod_id);
-        self.runtime.run_event_loop(false).await?;
-        mod_evaluate.await??;
-
-        Ok(())
     }
 }
 

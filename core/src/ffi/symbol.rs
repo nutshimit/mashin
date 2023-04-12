@@ -1,5 +1,3 @@
-// Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
-
 use deno_core::error::type_error;
 use deno_core::error::AnyError;
 
@@ -66,7 +64,6 @@ pub struct Symbol {
     pub ptr: libffi::middle::CodePtr,
     pub parameter_types: Vec<NativeType>,
     pub result_type: NativeType,
-    pub can_callback: bool,
 }
 
 #[allow(clippy::non_send_fields_in_send_ty)]

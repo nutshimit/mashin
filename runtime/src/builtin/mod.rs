@@ -1,5 +1,5 @@
+mod ffi;
 pub(crate) mod mashin_core_client;
-mod state;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");

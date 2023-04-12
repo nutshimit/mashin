@@ -19,12 +19,14 @@ import * as urlPattern from "ext:deno_url/01_urlpattern.js";
 
 const core = globalThis.Deno.core;
 
+const consoleVoid = {
+  log: (..._data) => {},
+  warn: (..._data) => {},
+  trace: (..._data) => {},
+  debug: (..._data) => {},
+};
+
 const globalScope = {
-  console: util.nonEnumerable(
-    new console.Console((msg, level) =>
-      core.ops.as__client_print(msg, level > 1)
-    )
-  ),
   ErrorEvent: util.nonEnumerable(event.ErrorEvent),
   Event: util.nonEnumerable(event.Event),
   EventTarget: util.nonEnumerable(event.EventTarget),

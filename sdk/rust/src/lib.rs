@@ -1,16 +1,17 @@
-use std::{any::Any, rc::Rc};
+use std::{any::Any, cell::RefCell, rc::Rc};
 
 pub use crate::urn::Urn;
 pub use anyhow::Result;
 use async_trait::async_trait;
 pub use deserialize::deserialize_state_field;
+pub use logger::CliLogger;
 pub use mashin_macro::resource;
 pub use provider_state::ProviderState;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 mod deserialize;
-
+mod logger;
 mod provider_state;
 mod urn;
 
@@ -29,14 +30,56 @@ pub mod ext {
 
 pub type ResourceId = u32;
 
+#[derive(Debug)]
+pub struct ResourceArgs {
+    pub action: Rc<ResourceAction>,
+    pub urn: Rc<Urn>,
+    pub raw_config: Rc<Value>,
+    pub raw_state: Rc<RefCell<Value>>,
+}
+
+#[derive(Default, Clone, Debug, PartialEq)]
 pub enum ResourceAction {
-    Update,
+    Update {
+        diff: Rc<ResourceDiff>,
+    },
     Create,
     Delete,
+    #[default]
     Get,
 }
 
-#[derive(Debug, Clone, Default)]
+impl ResourceAction {
+    /// Present participe of the action
+    pub fn action_present_participe_str(&self) -> &str {
+        match self {
+            ResourceAction::Update { .. } => "Updating",
+            ResourceAction::Create => "Creating",
+            ResourceAction::Delete => "Deleting",
+            ResourceAction::Get => "Reading",
+        }
+    }
+    /// Simple present of the action
+    pub fn action_present_str(&self) -> &str {
+        match self {
+            ResourceAction::Update { .. } => "Update",
+            ResourceAction::Create => "Create",
+            ResourceAction::Delete => "Delete",
+            ResourceAction::Get => "Read",
+        }
+    }
+
+    pub fn action_past_str(&self) -> &str {
+        match self {
+            ResourceAction::Update { .. } => "Updated",
+            ResourceAction::Create => "Created",
+            ResourceAction::Delete => "Deleted",
+            ResourceAction::Get => "Read",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct ResourceDiff(Vec<String>);
 
 impl ResourceDiff {
@@ -80,15 +123,22 @@ pub trait Resource: ResourceEq + ResourceSerialize {
     where
         Self: Sized;
 
-    fn __set_config_from_value(&mut self, config: &Value);
+    fn __set_config_from_value(&mut self, config: &Rc<Value>);
 
-    fn from_current_state(name: &str, urn: &str, state: &Value) -> Result<Box<Self>>
+    fn from_current_state(
+        name: &str,
+        urn: &str,
+        raw_state: Rc<RefCell<Value>>,
+    ) -> Result<Rc<RefCell<Self>>>
     where
         Self: Default,
         for<'de> Self: Deserialize<'de>,
     {
+        let state = raw_state.borrow_mut();
         if state.as_null().is_some() {
-            Ok(Box::new(Self::__default_with_params(name, urn)))
+            Ok(Rc::new(RefCell::new(Self::__default_with_params(
+                name, urn,
+            ))))
         } else {
             let mut state = state.clone();
             let merge_fields = json!({
@@ -104,9 +154,13 @@ pub trait Resource: ResourceEq + ResourceSerialize {
 
             merge_json(&mut state, &merge_fields);
 
-            Ok(Box::new(::serde_json::from_value::<Self>(state)?))
+            Ok(Rc::new(RefCell::new(::serde_json::from_value::<Self>(
+                state,
+            )?)))
         }
     }
+
+    fn name(&self) -> &str;
 
     async fn get(&mut self, provider_state: &ProviderState) -> Result<()>;
     async fn create(&mut self, provider_state: &ProviderState) -> Result<()>;
@@ -139,7 +193,11 @@ impl<R: Serialize> ResourceSerialize for R {
 pub trait Provider: Send + Sync {
     async fn init(&mut self) -> Result<()>;
     fn state(&self) -> &ProviderState;
-    fn __from_current_state(&self, urn: &Urn, state: &Value) -> Result<Box<dyn Resource>>;
+    fn __from_current_state(
+        &self,
+        urn: &Rc<Urn>,
+        state: &Rc<RefCell<Value>>,
+    ) -> Result<Rc<RefCell<dyn Resource>>>;
 }
 
 pub fn merge_json(a: &mut serde_json::Value, b: &serde_json::Value) {
