@@ -1,4 +1,4 @@
-use crate::{colors, js_log, log};
+use crate::{js_log, log};
 use deno_core::{
     error::{bad_resource_id, type_error, AnyError},
     resolve_path,
@@ -7,6 +7,7 @@ use deno_core::{
 };
 use libffi::middle::Arg;
 use mashin_core::{
+    colors,
     sdk::{
         ext::anyhow::{anyhow, bail},
         ResourceAction, ResourceArgs, ResourceDiff, ResourceResult, Result, Urn,
@@ -150,6 +151,8 @@ pub(crate) fn as__runtime__resource_execute(
     };
     // take the current state to compare with the new one
     let current_state = raw_state.as_ref().take().into();
+
+    println!("{:#?}", new_state);
 
     // this is the first run
     if already_executed_resource.is_none() {

@@ -1,11 +1,11 @@
+use crate::{colors, Result};
+use mashin_sdk::{ResourceDiff, KEYS_CORE, KEY_VALUE};
+use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::fmt;
 use std::ops::Deref;
 
-use itertools::merge_join_by;
-use itertools::EitherOrBoth::{Both, Left, Right};
-use mashin_sdk::{ResourceDiff, KEYS_CORE, KEY_VALUE};
-use serde_json::Value;
+use super::trim_sensitive::fold_json;
 
 pub trait Indexes {
     fn indexes(&self) -> Vec<usize>;
@@ -44,7 +44,7 @@ impl fmt::Display for Path {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             // if state are equal, there is no diff generated
-            Path::Root => unimplemented!(),
+            Path::Root => write!(f, "{}", "TEST"),
             // grab all keys
             Path::Keys(keys) => {
                 write!(
@@ -99,27 +99,141 @@ impl StateResourceDiff {
     }
 
     pub fn is_create(&self) -> bool {
-        self.rhs.is_none()
+        self.rhs_is_null() && !self.lhs_is_null()
     }
 
     pub fn is_delete(&self) -> bool {
-        self.lhs.is_none()
+        self.lhs_is_null() && !self.rhs_is_null()
     }
 
     pub fn is_update(&self) -> bool {
-        self.lhs.is_some() && self.rhs.is_some()
+        !self.lhs_is_null() && !self.rhs_is_null()
     }
 
+    /// The diff path
     pub fn path(&self) -> &Path {
         &self.path
     }
 
-    pub fn previous_state(&self) -> &Option<Value> {
+    /// Habitually the previous state
+    pub fn rhs(&self) -> &Option<Value> {
         &self.rhs
     }
 
-    pub fn new_state(&self) -> &Option<Value> {
+    /// Habitually the new state
+    pub fn lhs(&self) -> &Option<Value> {
         &self.lhs
+    }
+
+    /// Check if lhs (habitually the new state) is null
+    pub fn lhs_is_null(&self) -> bool {
+        match &self.lhs {
+            Some(lhs) => lhs.is_null(),
+            None => false,
+        }
+    }
+
+    /// Check if rhs (habitually the previous state) is null
+    pub fn rhs_is_null(&self) -> bool {
+        match &self.rhs {
+            Some(rhs) => rhs.is_null(),
+            None => false,
+        }
+    }
+
+    // return the closing line if needed with the right color
+    pub fn print_diff(&self) -> Result<Option<String>> {
+        const LINE: &str = "-------------------\n\n";
+        if self.is_create() {
+            let mut diff_print = self.lhs().clone().unwrap_or_default().to_string();
+
+            if let Some(new_state) = self.lhs() {
+                if new_state.is_object() {
+                    diff_print = format!(
+                        "{}",
+                        mashin_sdk::ext::serde_json::to_string_pretty(new_state,)?
+                            .split("\n")
+                            .collect::<Vec<_>>()
+                            .join("\n   |     + ")
+                    );
+                }
+            }
+            log::info!(
+                "   {}     {} {}: {}",
+                colors::green_bold("|"),
+                colors::green_bold("+"),
+                colors::green_bold(self.path().to_string()),
+                colors::green_bold(diff_print)
+            );
+            return Ok(Some(colors::green_bold(LINE).to_string()));
+        }
+
+        if self.is_update() {
+            let mut diff_new =
+                colors::green_bold(self.lhs().clone().unwrap_or_default().to_string()).to_string();
+            let mut diff_old =
+                colors::red_strike(self.rhs().clone().unwrap_or_default().to_string()).to_string();
+
+            let whitespace = " ".repeat(self.path().to_string().len());
+            let box_line = format!(
+                "{}{}",
+                colors::cyan_bold("   |     ",),
+                colors::cyan_bold("^".repeat(self.path().to_string().len() + 3),)
+            );
+
+            if let Some(new_state) = self.lhs() {
+                if new_state.is_object() {
+                    diff_new = format!(
+                        "{}",
+                        mashin_sdk::ext::serde_json::to_string_pretty(new_state,)?
+                            .split("\n")
+                            .map(|s| colors::green_bold(s).to_string())
+                            .collect::<Vec<_>>()
+                            .join(
+                                format!("{}  {}", colors::cyan_bold("\n   |     +"), whitespace)
+                                    .as_str()
+                            )
+                    );
+                }
+            }
+
+            if let Some(old_state) = self.rhs() {
+                if old_state.is_object() {
+                    diff_old = format!(
+                        "{}",
+                        mashin_sdk::ext::serde_json::to_string_pretty(old_state,)?
+                            .split("\n")
+                            .map(|s| colors::red_strike(s).to_string())
+                            .collect::<Vec<_>>()
+                            .join(
+                                format!("{}  {}", colors::cyan_bold("\n   |     -"), whitespace)
+                                    .as_str()
+                            )
+                    );
+                }
+            }
+
+            log::info!(
+                "   {}     {} {}: {}",
+                colors::cyan_bold("|"),
+                colors::cyan_bold("-"),
+                colors::cyan_bold(self.path().to_string()),
+                diff_old
+            );
+            log::info!(
+                "   {}     {} {}  {}",
+                colors::cyan_bold("|"),
+                colors::cyan_bold("+"),
+                whitespace,
+                diff_new
+            );
+
+            log::info!("{}", box_line);
+
+            return Ok(Some(colors::cyan_bold(LINE).to_string()));
+        }
+
+        Ok(None)
     }
 }
 
@@ -147,23 +261,24 @@ impl fmt::Display for Key {
 
 pub fn diff(lhs: Value, rhs: Value) -> StateDiff {
     let mut acc = vec![];
-    diff_with(lhs, rhs, Path::Root, &mut acc);
+    diff_with(
+        fold_json(&lhs, Some("[sensitive]")),
+        fold_json(&rhs, Some("[sensitive]")),
+        Path::Root,
+        &mut acc,
+    );
     StateDiff { resources: acc }
 }
 
 fn diff_with(lhs: Value, rhs: Value, path: Path, acc: &mut Vec<StateResourceDiff>) {
     let mut folder = DiffFolder { rhs, path, acc };
-    fold_json(lhs, &mut folder);
-}
-
-fn fold_json(json: Value, folder: &mut DiffFolder<'_>) {
-    match json {
-        Value::Null => folder.on_null(json),
-        Value::Bool(_) => folder.on_bool(json),
-        Value::Number(_) => folder.on_number(json),
-        Value::String(_) => folder.on_string(json),
-        Value::Array(_) => folder.on_array(json),
-        Value::Object(_) => folder.on_object(json),
+    match lhs {
+        Value::Null => folder.on_null(lhs),
+        Value::Bool(_) => folder.on_bool(lhs),
+        Value::Number(_) => folder.on_number(lhs),
+        Value::String(_) => folder.on_string(lhs),
+        Value::Array(_) => folder.on_array(lhs),
+        Value::Object(_) => folder.on_object(lhs),
     }
 }
 
@@ -273,11 +388,19 @@ impl<'a> DiffFolder<'a> {
                 }
             }
         } else {
-            self.acc.push(StateResourceDiff {
-                lhs: Some(lhs),
-                rhs: Some(self.rhs.clone()),
-                path: self.path.clone(),
-            });
+            if self.path == Path::Root {
+                let lhs = lhs.as_object().unwrap();
+                for (key, value) in lhs {
+                    let path = self.path.append(Key::Field(key.clone()));
+                    diff_with(value.clone(), Value::Null, path, self.acc);
+                }
+            } else {
+                self.acc.push(StateResourceDiff {
+                    lhs: Some(lhs.clone()),
+                    rhs: Some(self.rhs.clone()),
+                    path: self.path.clone(),
+                });
+            }
         }
     }
 }

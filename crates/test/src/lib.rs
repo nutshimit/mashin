@@ -100,16 +100,36 @@ pub struct BucketConfig {
     woot: Option<bool>,
 }
 
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DeepConfig {
+    #[serde(default)]
+    deep1: DeepConfig2,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DeepConfig2 {
+    #[serde(default)]
+    deep2: DeepConfig3,
+    #[serde(default)]
+    test: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DeepConfig3 {
+    #[serde(default)]
+    deep3: bool,
+}
+
 #[resource]
 pub struct Bucket {
     url: Option<String>,
-
+    #[sensitive]
+    password: Option<String>,
+    deep: DeepConfig,
+    test: Option<String>,
     // this should be injected by the macro
-    #[sensitive]
     __name: String,
-    #[sensitive]
     __config: BucketConfig,
-    #[sensitive]
     __urn: String,
 }
 

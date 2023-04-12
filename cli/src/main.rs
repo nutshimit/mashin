@@ -17,8 +17,8 @@
 pub(crate) use anyhow::Result;
 use clap::Parser;
 use cli::{Cli, Subcommand};
-use mashin_runtime::bold;
-use std::{env, rc::Rc};
+use mashin_runtime::colors;
+use std::env;
 
 mod cli;
 mod logger;
@@ -39,9 +39,8 @@ pub async fn main() -> Result<(), anyhow::Error> {
     let args: Vec<String> = env::args().collect();
     let cli = Cli::parse();
 
-    println!("\n\n{}\n", bold(MASHIN));
-
     logger::init();
+    log::info!("\n\n{}\n", colors::bold(MASHIN));
 
     match cli.subcommand {
         Subcommand::Run(cmd) => cmd.run(args).await,

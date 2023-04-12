@@ -1825,6 +1825,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "atty",
  "base64 0.21.0",
  "deno_core",
  "dlopen",
@@ -1832,12 +1833,14 @@ dependencies = [
  "libffi",
  "log",
  "mashin_sdk",
+ "once_cell",
  "quote 1.0.26",
  "rkv",
  "serde",
  "serde_json",
  "sodiumoxide",
  "syn 1.0.109",
+ "termcolor",
  "tokio",
  "url",
 ]
@@ -1856,7 +1859,6 @@ name = "mashin_runtime"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "atty",
  "deno_ast",
  "deno_console",
  "deno_core",
@@ -1869,11 +1871,9 @@ dependencies = [
  "libffi",
  "log",
  "mashin_core",
- "once_cell",
  "reqwest",
  "serde",
  "serde-value",
- "termcolor",
  "tokio",
  "winapi",
 ]

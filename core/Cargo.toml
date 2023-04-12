@@ -19,6 +19,9 @@ deno_core.workspace = true
 libffi.workspace = true
 dlopen.workspace = true
 log.workspace = true
+termcolor.workspace = true
+atty.workspace = true
+once_cell.workspace = true
 
 url = "2.3"
 syn = "1.0.109"

@@ -1,5 +1,4 @@
 use anyhow::{anyhow, bail, Result};
-pub use colors::*;
 use deno_ast::{MediaType, ParseParams, SourceTextInfo};
 use deno_core::futures::FutureExt;
 use deno_core::serde_json::json;
@@ -12,6 +11,7 @@ use deno_fetch::FetchPermissions;
 use deno_web::BlobStore;
 use deno_web::TimersPermission;
 use deno_websocket::WebSocketPermissions;
+pub use mashin_core::colors;
 pub use mashin_core::sdk::{ResourceAction, Urn};
 pub use mashin_core::ExecutedResource;
 use mashin_core::{BackendState, ExecutedResources, MashinEngine};
@@ -26,7 +26,6 @@ use std::pin::Pin;
 use std::rc::Rc;
 
 mod builtin;
-mod colors;
 
 #[macro_export]
 macro_rules! log {

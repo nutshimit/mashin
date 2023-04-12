@@ -123,7 +123,7 @@ impl RawState {
     }
 
     pub fn generate_ts_output(&self) -> Value {
-        trim_sensitive::trim_sensitive_fields(&self.0)
+        trim_sensitive::fold_json(&self.0, None)
     }
 
     pub fn compare_with(&self, b: &Self) -> StateDiff {

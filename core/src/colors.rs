@@ -55,6 +55,15 @@ pub fn red_bold<S: AsRef<str>>(s: S) -> impl fmt::Display {
     style(s, style_spec)
 }
 
+pub fn red_strike<S: AsRef<str>>(s: S) -> impl fmt::Display {
+    let mut style_spec = ColorSpec::new();
+    style_spec
+        .set_fg(Some(Red))
+        .set_strikethrough(true)
+        .set_dimmed(true);
+    style(s, style_spec)
+}
+
 pub fn green_bold<S: AsRef<str>>(s: S) -> impl fmt::Display {
     let mut style_spec = ColorSpec::new();
     style_spec.set_fg(Some(Green)).set_bold(true);

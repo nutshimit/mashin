@@ -2,6 +2,7 @@ use std::{collections::HashMap, ffi::c_void, rc::Rc};
 
 mod backend;
 mod client;
+pub mod colors;
 mod config;
 mod ffi;
 mod state;

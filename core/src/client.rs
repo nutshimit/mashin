@@ -1,8 +1,10 @@
 use crate::{
     backend::BackendState,
+    colors,
     state::{derive_key, StateDiff},
     DynamicLibraryResource, NativeValue, RawState, Result,
 };
+use anyhow::anyhow;
 use deno_core::Resource;
 use mashin_sdk::{ResourceAction, ResourceArgs, ResourceDiff, Urn};
 use serde_json::Value;
@@ -66,6 +68,49 @@ impl ExecutedResources {
             .filter_map(|(_, s)| s.required_change.clone())
             .collect()
     }
+
+    pub fn print_diff_plan(&self) -> () {
+        let mut to_add = 0;
+        let mut to_update = 0;
+        let mut to_remove = 0;
+        let all_pending_actions = self.actions();
+
+        if !all_pending_actions.is_empty() {
+            log::info!("\n\nResource actions are indicated with the following symbols:");
+            for action in &all_pending_actions {
+                match action {
+                    ResourceAction::Create => {
+                        to_add += 1;
+                        log::info!("  {} create", colors::green_bold("+"))
+                    }
+                    ResourceAction::Delete => {
+                        to_remove += 1;
+                        log::info!("  {} delete", colors::red_bold("-"))
+                    }
+                    ResourceAction::Update { .. } => {
+                        to_update += 1;
+                        log::info!("  {} update", colors::cyan_bold("*"))
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        log::info!("\nMashin will perform the following actions:\n");
+
+        for (urn, executed_resource) in self.iter() {
+            match executed_resource.print_diff(urn) {
+                _ => {}
+            }
+        }
+
+        log::info!(
+            "Plan: {} to add, {} to change, {} to destroy.",
+            to_add,
+            to_update,
+            to_remove
+        );
+    }
 }
 
 pub struct RegisteredProvider {
@@ -94,27 +139,66 @@ impl ExecutedResource {
         current_state: &RawState,
         new_state: &RawState,
     ) -> Self {
+        let diff = new_state.compare_with(&current_state);
+
         // doing some checkup here, so we dont have to borrow the both state, so they can be dropped from here
         // as we only need the diff state and the next action needed
-        let (required_change, diff) = if current_state.is_null() {
-            (Some(ResourceAction::Create), None)
+        let required_change = if current_state.is_null() {
+            Some(ResourceAction::Create)
         } else if current_state.inner() == new_state.inner() {
-            (None, None)
+            None
         } else {
-            let diff = new_state.compare_with(&current_state);
-            (
-                Some(ResourceAction::Update {
-                    diff: Rc::new(diff.provider_resource_diff()),
-                }),
-                Some(diff),
-            )
+            Some(ResourceAction::Update {
+                diff: Rc::new(diff.provider_resource_diff()),
+            })
         };
 
         ExecutedResource {
             provider: provider_name,
-            diff,
+            diff: Some(diff),
             required_change,
         }
+    }
+
+    pub fn print_diff(&self, urn: &str) -> Result<()> {
+        let resource_action = self
+            .required_change
+            .clone()
+            .ok_or(anyhow!("no changes required"))?;
+        let resource_diff = self.diff.clone().ok_or(anyhow!("no resource diff"))?;
+
+        let total_changes = resource_diff.len();
+        let mut total_changes_processed = 0;
+
+        let arrow = match &resource_action {
+            ResourceAction::Update { .. } => colors::cyan_bold("-->").to_string(),
+            ResourceAction::Create => colors::green_bold("-->").to_string(),
+            ResourceAction::Delete => colors::red_bold("-->").to_string(),
+            _ => "".to_string(),
+        };
+
+        //    --> [aws:s3:bucket?=test1234atmos1000]: Need to be created
+        log::info!(
+            "   {arrow} [{}]: Need to be {}",
+            colors::bold(urn.replace("urn:provider:", "")),
+            resource_action.action_past_str().to_lowercase()
+        );
+
+        for resource_diff in resource_diff.iter() {
+            if resource_diff.is_eq() {
+                continue;
+            }
+
+            let closing_line = resource_diff.print_diff()?.unwrap_or_default();
+
+            total_changes_processed += 1;
+
+            if total_changes_processed == total_changes {
+                log::info!("   {}", closing_line,);
+            }
+        }
+
+        Ok(())
     }
 }
 

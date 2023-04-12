@@ -15,7 +15,11 @@ mod logger;
 mod provider_state;
 mod urn;
 
+pub const KEY_CONFIG: &'static str = "__config";
+pub const KEY_URN: &'static str = "__urn";
+pub const KEY_NAME: &'static str = "__name";
 pub const KEY_SENSITIVE: &'static str = "__sensitive";
+// keys to skip
 pub const KEYS_CORE: [&'static str; 1] = [KEY_SENSITIVE];
 pub const KEY_VALUE: &'static str = "__value";
 

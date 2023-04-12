@@ -25,9 +25,6 @@ serde.workspace = true
 
 anyhow.workspace = true
 mashin_core.workspace = true
-termcolor.workspace = true
-atty.workspace = true
-once_cell.workspace = true
 
 #dynasmrt = "1.2.3"
 serde-value = "0.7"

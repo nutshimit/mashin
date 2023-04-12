@@ -21,7 +21,7 @@ const bucket = new aws.s3.Bucket(
 );
 
 const bucket2 = new aws.s3.Bucket(
-  "yayabitch",
+  "test1234atmos1000",
   {
     acl: "public-read",
   },
@@ -31,4 +31,4 @@ const bucket2 = new aws.s3.Bucket(
   }
 );
 
-//console.log(bucket.data);
+console.log(bucket.data);

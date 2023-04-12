@@ -1,4 +1,4 @@
-use mashin_runtime::bold;
+use mashin_runtime::colors;
 use mashin_sdk::CliLogger;
 use std::io::Write;
 
@@ -19,7 +19,7 @@ pub(crate) fn init() {
                     writeln!(
                         buf,
                         "[{}]: {}",
-                        bold(target.replace("mashin::provider::", "provider:")),
+                        colors::bold(target.replace("mashin::provider::", "provider:")),
                         record.args()
                     )
                 } else {
