@@ -5,7 +5,7 @@ pub use anyhow::Result;
 use async_trait::async_trait;
 pub use deserialize::deserialize_state_field;
 pub use logger::CliLogger;
-pub use mashin_macro::resource;
+pub use mashin_macro::{provider, resource};
 pub use provider_state::ProviderState;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -110,10 +110,7 @@ impl ResourceResult {
 }
 
 pub trait ResourceEq {
-    // An &Any can be cast to a reference to a concrete type.
     fn as_any(&self) -> &dyn Any;
-
-    // Perform the test.
     fn is_eq(&self, other: &dyn Resource) -> bool;
 }
 
@@ -121,8 +118,7 @@ pub trait ResourceSerialize {
     fn to_raw_state(&self) -> Result<serde_json::Value>;
 }
 
-#[async_trait]
-pub trait Resource: ResourceEq + ResourceSerialize {
+pub trait ResourceDefault {
     fn __default_with_params(name: &str, urn: &str) -> Self
     where
         Self: Sized;
@@ -165,7 +161,11 @@ pub trait Resource: ResourceEq + ResourceSerialize {
     }
 
     fn name(&self) -> &str;
+    fn urn(&self) -> &str;
+}
 
+#[async_trait]
+pub trait Resource: ResourceEq + ResourceSerialize + ResourceDefault {
     async fn get(&mut self, provider_state: &ProviderState) -> Result<()>;
     async fn create(&mut self, provider_state: &ProviderState) -> Result<()>;
     async fn delete(&mut self, provider_state: &ProviderState) -> Result<()>;
@@ -194,15 +194,22 @@ impl<R: Serialize> ResourceSerialize for R {
 }
 
 #[async_trait]
-pub trait Provider: Send + Sync {
-    async fn init(&mut self) -> Result<()>;
-    fn state(&self) -> &ProviderState;
+pub trait ProviderBuilder {
+    async fn build(&mut self) -> Result<()>;
+}
+
+pub trait ProviderDefault {
+    fn state(&mut self) -> &mut Box<ProviderState>;
+    fn state_as_ref(&self) -> &ProviderState;
     fn __from_current_state(
         &self,
         urn: &Rc<Urn>,
         state: &Rc<RefCell<Value>>,
     ) -> Result<Rc<RefCell<dyn Resource>>>;
 }
+
+#[async_trait]
+pub trait Provider: ProviderBuilder + ProviderDefault + Send + Sync {}
 
 pub fn merge_json(a: &mut serde_json::Value, b: &serde_json::Value) {
     match (a, b) {
