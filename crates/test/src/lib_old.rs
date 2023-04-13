@@ -33,7 +33,7 @@ pub struct AwsState {
 #[derive(Default)]
 pub struct AwsProvider {
     __config: AwsConfig,
-    __state: Box<ProviderState>,
+    __state: Rc<RefCell<ProviderState>>,
 }
 
 #[async_trait]

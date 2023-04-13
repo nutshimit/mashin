@@ -4,7 +4,10 @@ use std::any::TypeId;
 use std::collections::BTreeMap;
 
 #[derive(Default)]
-pub struct ProviderState {
+pub struct ProviderState
+where
+    Self: Send + Sync,
+{
     data: BTreeMap<TypeId, Box<dyn Any + Send + Sync>>,
 }
 

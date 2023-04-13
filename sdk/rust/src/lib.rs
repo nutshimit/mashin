@@ -1,4 +1,4 @@
-use std::{any::Any, cell::RefCell, rc::Rc};
+use std::{any::Any, cell::RefCell, rc::Rc, sync::Arc};
 
 pub use crate::urn::Urn;
 pub use anyhow::Result;
@@ -192,6 +192,8 @@ impl<R: Serialize> ResourceSerialize for R {
         serde_json::to_value(self).map_err(Into::into)
     }
 }
+
+pub trait Config {}
 
 #[async_trait]
 pub trait ProviderBuilder {

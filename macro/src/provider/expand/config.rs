@@ -14,11 +14,17 @@ pub fn expand_config(def: &mut Def) -> proc_macro2::TokenStream {
         }
     };
 
-    config_item.attrs.push(syn::parse_quote!(
-        #[derive(
-            Default
-        )]
-    ));
+    let ident = &config_item.ident;
 
-    quote::quote!()
+    config_item.attrs.push(
+        syn::parse_quote!(#[derive(Debug, Default, ::serde::Serialize, ::serde::Deserialize)]),
+    );
+
+    config_item
+        .attrs
+        .push(syn::parse_quote!(#[serde(rename_all = "camelCase")]));
+
+    quote::quote! {
+        impl ::mashin_sdk::Config for #ident {}
+    }
 }

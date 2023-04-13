@@ -90,13 +90,17 @@ pub fn expand_resources(def: &mut Def) -> proc_macro2::TokenStream {
         quote! {
 
           #[derive(Default, Debug, Clone, PartialEq, ::mashin_sdk::ext::serde::Deserialize)]
+          #[serde(rename_all = "camelCase")]
           #vis struct #resource_ident {
             #(#fields,)*
             #[serde(deserialize_with = "::mashin_sdk::deserialize_state_field", default)]
+            #[serde(rename = "__config")]
             __config: #config_ident,
             #[serde(deserialize_with = "::mashin_sdk::deserialize_state_field", default)]
+            #[serde(rename = "__name")]
             __name: String,
             #[serde(deserialize_with = "::mashin_sdk::deserialize_state_field", default)]
+            #[serde(rename = "__urn")]
             __urn: String,
           }
 

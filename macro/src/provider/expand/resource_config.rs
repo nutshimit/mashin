@@ -20,6 +20,9 @@ pub fn expand_resource_config(def: &mut Def) -> proc_macro2::TokenStream {
         resource_item.attrs.push(syn::parse_quote! {
             #[derive(Default, Debug, Clone, ::serde::Serialize, ::serde::Deserialize, PartialEq)]
         });
+        resource_item
+            .attrs
+            .push(syn::parse_quote! {#[serde(rename_all = "camelCase")]});
 
         resource_item
             .fields

@@ -9,7 +9,7 @@ mod provider {
 
     #[mashin::config]
     pub struct Config {
-        aws_key: Option<String>,
+        access_key: Option<String>,
     }
 
     #[mashin::state]
@@ -20,6 +20,8 @@ mod provider {
     #[mashin::builder]
     impl ProviderBuilder for Provider {
         async fn build(&mut self) -> mashin_sdk::Result<()> {
+            log!(info, "New provider {:?}", self.config());
+
             let config = aws_config::load_from_env().await;
             let client = aws_sdk_s3::Client::new(&config);
 
@@ -56,7 +58,7 @@ mod provider {
     #[mashin::calls]
     impl mashin_sdk::Resource for Bucket {
         async fn get(&mut self, provider_state: &mashin_sdk::ProviderState) -> Result<()> {
-            log!(info, "Refreshing ");
+            log!(info, "Refreshing {:?}", self.config());
 
             let state = provider_state
                 .try_borrow::<State>()

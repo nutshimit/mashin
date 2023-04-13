@@ -47,7 +47,7 @@ export interface ResourceOptions {
 export abstract class Provider extends Base {
   constructor(name: string, path: string, props: Inputs = {}) {
     super(name, props);
-    new __mashin.DynamicProvider(name, path);
+    new __mashin.DynamicProvider(name, path, props);
   }
 }
 

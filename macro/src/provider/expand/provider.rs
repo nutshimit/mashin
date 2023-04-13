@@ -28,7 +28,7 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
         let resource = &resource.ident;
         quote::quote! {
             #name => Ok(#resource::from_current_state(
-                #name,
+                name,
                 &urn.to_string(),
                 state.clone(),
             )?),
@@ -56,6 +56,10 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
         impl #ident {
             pub fn config(&self) -> &#config {
                 &self.__config
+            }
+            pub fn update_config(&mut self, config: ::std::rc::Rc<::mashin_sdk::ext::serde_json::Value>) -> ::mashin_sdk::Result<()> {
+                self.__config = ::mashin_sdk::ext::serde_json::from_value(config.clone().as_ref().clone())?;
+                Ok(())
             }
         }
 
@@ -91,7 +95,9 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
         impl mashin_sdk::Provider for #ident {}
 
         #[no_mangle]
-        pub extern "C" fn new(logger_ptr: *mut &'static ::mashin_sdk::CliLogger) -> *mut #ident {
+        pub extern "C" fn new(
+            logger_ptr: *mut &'static ::mashin_sdk::CliLogger,
+            args_ptr: *mut ::mashin_sdk::ext::serde_json::Value) -> *mut #ident {
             __MASHIN_LOG_INIT.call_once(|| {
                 let logger = unsafe {
                     let logger = Box::from_raw(logger_ptr);
@@ -104,9 +110,11 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
                 setup_panic_hook();
             });
 
+            let args = unsafe { ::std::rc::Rc::from_raw(args_ptr) };
 
             let runtime = ::mashin_sdk::ext::tokio::runtime::Runtime::new().expect("New runtime");
             let mut provider = #ident::default();
+            provider.update_config(args);
             runtime.block_on(provider.build()).expect("valid provider");
             let static_ref = Box::new(provider);
 
