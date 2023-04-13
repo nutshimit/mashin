@@ -24,7 +24,7 @@ impl Drop for DynamicLibraryResource {
 }
 
 impl DynamicLibraryResource {
-    pub fn call_new(&self) -> Result<*mut c_void> {
+    pub fn call_new(&self, props_ptr: *mut c_void) -> Result<*mut c_void> {
         let symbol = self
             .symbols
             .get("new")
@@ -33,10 +33,13 @@ impl DynamicLibraryResource {
         let logger_ptr = Box::into_raw(Box::new(log::logger())) as *mut c_void;
 
         let provider_pointer = unsafe {
-            let call_args = vec![NativeValue {
-                pointer: logger_ptr,
-            }
-            .as_arg(symbol.parameter_types.get(0).unwrap())];
+            let call_args = vec![
+                NativeValue {
+                    pointer: logger_ptr,
+                }
+                .as_arg(symbol.parameter_types.get(0).unwrap()),
+                NativeValue { pointer: props_ptr }.as_arg(symbol.parameter_types.get(1).unwrap()),
+            ];
             symbol.cif.call::<*mut c_void>(symbol.ptr, &call_args)
         };
 

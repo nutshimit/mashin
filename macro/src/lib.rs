@@ -2,6 +2,13 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Meta};
 
+mod provider;
+
+#[proc_macro_attribute]
+pub fn provider(attr: TokenStream, item: TokenStream) -> TokenStream {
+    provider::provider(attr, item)
+}
+
 #[proc_macro_attribute]
 pub fn resource(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(item as DeriveInput);

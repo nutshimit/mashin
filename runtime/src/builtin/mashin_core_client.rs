@@ -152,8 +152,6 @@ pub(crate) fn as__runtime__resource_execute(
     // take the current state to compare with the new one
     let current_state = raw_state.as_ref().take().into();
 
-    println!("{:#?}", new_state);
-
     // this is the first run
     if already_executed_resource.is_none() {
         let executed_resource = ExecutedResource::new(
@@ -184,6 +182,7 @@ pub struct ProviderLoadArgs {
     name: String,
     path: String,
     symbols: HashMap<String, ForeignFunction>,
+    props: Value,
 }
 
 #[deno_core::op]
@@ -193,6 +192,7 @@ pub fn as__runtime__register_provider__allocate(
 ) -> Result<()> {
     let path = args.path;
     let provider_name = args.name;
+    let props = args.props;
 
     let mashin = op_state.borrow_mut::<MashinEngine>();
     let mut providers = mashin.providers.borrow_mut();
@@ -235,7 +235,7 @@ pub fn as__runtime__register_provider__allocate(
             foreign_fn.result.clone().try_into()?,
         );
 
-        let sym = Box::new(Symbol {
+        let sym: Box<Symbol> = Box::new(Symbol {
             cif,
             ptr,
             parameter_types: foreign_fn.parameters,
@@ -247,7 +247,7 @@ pub fn as__runtime__register_provider__allocate(
 
     // create new provider pointer
 
-    let provider_pointer = resource.call_new()?;
+    let provider_pointer = resource.call_new(Rc::into_raw(Rc::new(props)) as *mut c_void)?;
 
     let registered_provider = RegisteredProvider {
         dylib: resource,

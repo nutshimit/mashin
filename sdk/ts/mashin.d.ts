@@ -18,7 +18,7 @@ declare global {
     let engine: Mashin | null;
     let providers: ProviderList[];
     class DynamicProvider {
-      constructor(name: string, path: string);
+      constructor(name: string, path: string, props: Inputs);
     }
     class DynamicResource {
       constructor(urn: string, config: Inputs);

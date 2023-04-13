@@ -1,1 +1,0 @@
-{"name":"","littleEndian":false,"symbols":{"new":{"parameters":[],"result":"ptr","nonBlocking":false}},"typeDefs":{},"tsTypes":{}}tsTypes":{}}}}"config":"AwsConfig","state":"AwsState"}},"tsTypes":{"AwsProvider":"export type AwsProvider = {\n    config: AwsConfig;\n  state: AwsState;\n};"}}onfig;\n  state: AwsState;\n};"}}

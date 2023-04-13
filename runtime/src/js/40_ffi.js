@@ -3,13 +3,13 @@ const core = globalThis.Deno.core;
 const ops = core.ops;
 
 class DynamicProvider {
-  constructor(name, path) {
+  constructor(name, path, props) {
     ops.as__runtime__register_provider__allocate({
       name,
       path: pathFromURL(path),
       symbols: {
         new: {
-          parameters: ["pointer"],
+          parameters: ["pointer", "pointer"],
           result: "pointer",
         },
         run: {
@@ -21,6 +21,7 @@ class DynamicProvider {
           result: "void",
         },
       },
+      props,
     });
   }
 }
