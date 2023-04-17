@@ -1841,7 +1841,7 @@ dependencies = [
 
 [[package]]
 name = "mashin"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1855,7 +1855,7 @@ dependencies = [
 
 [[package]]
 name = "mashin_core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1881,7 +1881,7 @@ dependencies = [
 
 [[package]]
 name = "mashin_macro"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "Inflector",
  "darling 0.14.4",
@@ -1894,7 +1894,7 @@ dependencies = [
 
 [[package]]
 name = "mashin_runtime"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "deno_ast",
@@ -1922,7 +1922,7 @@ dependencies = [
 
 [[package]]
 name = "mashin_sdk"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
