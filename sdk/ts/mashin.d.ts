@@ -17,6 +17,8 @@ declare global {
     let rid: number | null;
     let engine: Mashin | null;
     let providers: ProviderList[];
+
+    function downloadProvider(provider: "github", url: string): Promise<void>;
     class DynamicProvider {
       constructor(name: string, path: string, props: Inputs);
     }

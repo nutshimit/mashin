@@ -14,80 +14,49 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
+use std::hash::{Hash, Hasher};
 use syn::spanned::Spanned;
 
 #[derive(Clone, Debug)]
-pub struct ResourceDef {
-	pub name: String,
-	pub config: syn::Ident,
+pub struct TsDef {
 	pub index: usize,
 	pub attr_span: proc_macro2::Span,
-	pub ident: syn::Ident,
 }
 
-mod keyword {
-	syn::custom_keyword!(sensitive);
-	syn::custom_keyword!(mashin);
+#[derive(Clone, Debug)]
+pub struct TsType {
+	pub doc: String,
+	pub name: String,
+	pub typescript: String,
+	pub mashin_ty: InternalMashinType,
+	pub is_enum: bool,
 }
 
-impl ResourceDef {
-	pub fn try_from(
-		name: String,
-		config: syn::Ident,
-		attr_span: proc_macro2::Span,
-		index: usize,
-		item: &mut syn::Item,
-	) -> syn::Result<Self> {
-		let item = if let syn::Item::Struct(item) = item {
-			item
-		} else {
-			let msg = "Invalid provider::resource, expected struct";
-			return Err(syn::Error::new(item.span(), msg))
-		};
-
-		let ident = item.ident.clone();
-		if !matches!(item.vis, syn::Visibility::Public(_)) {
-			let msg = "Invalid provider::resource, struct must be public";
-			return Err(syn::Error::new(item.span(), msg))
-		}
-
-		Ok(Self { name, config, attr_span, index, ident })
+impl PartialEq for TsType {
+	fn eq(&self, other: &Self) -> bool {
+		self.doc == other.doc &&
+			self.name == other.name &&
+			self.typescript == other.typescript &&
+			self.is_enum == other.is_enum
 	}
 }
 
-/// Input definition for the pallet builder.
-#[derive(Debug)]
-pub struct ResourceImplDef {
-	pub index: usize,
-	/// The span of the pallet::builder attribute.
-	pub attr_span: proc_macro2::Span,
-}
-
-impl ResourceImplDef {
-	pub fn try_from(
-		attr_span: proc_macro2::Span,
-		index: usize,
-		item: &mut syn::Item,
-	) -> syn::Result<Self> {
-		let _item = if let syn::Item::Impl(item) = item {
-			item
-		} else {
-			let msg = "Invalid mashin::builder, expected struct";
-			return Err(syn::Error::new(item.span(), msg))
-		};
-
-		Ok(Self { index, attr_span })
+impl Hash for TsType {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.typescript.hash(state);
 	}
 }
 
 #[derive(Clone, Debug)]
-pub struct ResourceConfigDef {
-	pub index: usize,
-	/// The span of the pallet::builder attribute.
-	pub attr_span: proc_macro2::Span,
+pub enum InternalMashinType {
+	ProviderConfig,
+	ResourceConfig,
+	// should pass the resource config ident
+	Resource(super::resource::ResourceDef),
+	Extra,
 }
 
-impl ResourceConfigDef {
+impl TsDef {
 	pub fn try_from(
 		attr_span: proc_macro2::Span,
 		index: usize,
@@ -96,7 +65,7 @@ impl ResourceConfigDef {
 		let _item = if let syn::Item::Struct(item) = item {
 			item
 		} else {
-			let msg = "Invalid mashin::builder, expected struct";
+			let msg = "Invalid mashin::ts, expected struct";
 			return Err(syn::Error::new(item.span(), msg))
 		};
 

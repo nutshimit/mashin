@@ -5,7 +5,11 @@ const core = globalThis.Deno.core;
 import { globalScope } from "ext:mashin_core/98_global_scope.js";
 import { env } from "ext:mashin_core/30_os.js";
 import { errors } from "ext:mashin_core/01_errors.js";
-import { DynamicProvider, DynamicResource } from "ext:mashin_core/40_ffi.js";
+import {
+  downloadProvider,
+  DynamicProvider,
+  DynamicResource,
+} from "ext:mashin_core/40_ffi.js";
 import DOMException from "ext:deno_web/01_dom_exception.js";
 import * as util from "ext:mashin_core/06_util.js";
 // console
@@ -122,9 +126,7 @@ globalThis.bootstrap = {
 };
 
 globalThis.__mashin = {
-  rid: null,
-  engine: null,
-  providers: [],
   DynamicProvider,
   DynamicResource,
+  downloadProvider,
 };

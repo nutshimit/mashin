@@ -14,40 +14,33 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use darling::ToTokens;
-use syn::spanned::Spanned;
+use deno_core::resolve_path;
+use std::{env::current_dir, path::PathBuf};
 
-#[derive(Debug)]
-pub struct StateDef {
-	pub index: usize,
-	pub attr_span: proc_macro2::Span,
-	pub ident: syn::Ident,
+#[derive(Debug, Clone, Default)]
+pub struct MashinDir {
+	root: PathBuf,
 }
 
-mod keyword {
-	syn::custom_keyword!(State);
-}
-
-impl StateDef {
-	pub fn try_from(
-		attr_span: proc_macro2::Span,
-		index: usize,
-		item: &mut syn::Item,
-	) -> syn::Result<Self> {
-		let item = if let syn::Item::Struct(item) = item {
-			item
+impl MashinDir {
+	pub fn new(maybe_custom_root: Option<PathBuf>) -> std::io::Result<Self> {
+		let root: PathBuf = if let Some(root) = maybe_custom_root {
+			root
 		} else {
-			let msg = "Invalid mashin::state, expected struct";
-			return Err(syn::Error::new(item.span(), msg))
+			resolve_path(".mashin", current_dir().expect("valid current dir").as_path())
+				.expect("valid path")
+				.to_file_path()
+				.expect("valid local path")
 		};
+		assert!(root.is_absolute());
 
-		if !matches!(item.vis, syn::Visibility::Public(_)) {
-			let msg = "Invalid mashin::state, struct must be public";
-			return Err(syn::Error::new(item.span(), msg))
-		}
-
-		syn::parse2::<keyword::State>(item.ident.to_token_stream())?;
-
-		Ok(Self { index, attr_span, ident: item.ident.clone() })
+		let mashin_dir = Self { root };
+		Ok(mashin_dir)
+	}
+	pub fn deps_folder_path(&self) -> PathBuf {
+		self.root.join("deps")
+	}
+	pub fn state_folder_path(&self) -> PathBuf {
+		self.root.join("state")
 	}
 }

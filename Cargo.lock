@@ -157,7 +157,7 @@ dependencies = [
 
 [[package]]
 name = "atmosphere-test"
-version = "0.1.0"
+version = "0.1.11"
 dependencies = [
  "aws-config",
  "aws-sdk-s3",
@@ -1883,9 +1883,12 @@ dependencies = [
 name = "mashin_macro"
 version = "0.1.0"
 dependencies = [
+ "Inflector",
  "darling 0.14.4",
  "proc-macro2 1.0.56",
  "quote 1.0.26",
+ "serde",
+ "serde_json",
  "syn 1.0.109",
 ]
 
@@ -1903,10 +1906,14 @@ dependencies = [
  "deno_webidl",
  "deno_websocket",
  "dlopen",
+ "encoding_rs",
+ "libc",
  "libffi",
  "log",
  "mashin_core",
+ "rand",
  "reqwest",
+ "ring",
  "serde",
  "serde-value",
  "tokio",

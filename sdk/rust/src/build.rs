@@ -14,40 +14,16 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use darling::ToTokens;
-use syn::spanned::Spanned;
+pub fn build() {
+	if let Ok(version) = std::env::var("CARGO_PKG_VERSION") {
+		println!("cargo:rustc-env=MASHIN_PKG_VERSION={}", version);
+	}
 
-#[derive(Debug)]
-pub struct StateDef {
-	pub index: usize,
-	pub attr_span: proc_macro2::Span,
-	pub ident: syn::Ident,
-}
+	if let Ok(name) = std::env::var("CARGO_PKG_NAME") {
+		println!("cargo:rustc-env=MASHIN_PKG_NAME={}", name);
+	}
 
-mod keyword {
-	syn::custom_keyword!(State);
-}
-
-impl StateDef {
-	pub fn try_from(
-		attr_span: proc_macro2::Span,
-		index: usize,
-		item: &mut syn::Item,
-	) -> syn::Result<Self> {
-		let item = if let syn::Item::Struct(item) = item {
-			item
-		} else {
-			let msg = "Invalid mashin::state, expected struct";
-			return Err(syn::Error::new(item.span(), msg))
-		};
-
-		if !matches!(item.vis, syn::Visibility::Public(_)) {
-			let msg = "Invalid mashin::state, struct must be public";
-			return Err(syn::Error::new(item.span(), msg))
-		}
-
-		syn::parse2::<keyword::State>(item.ident.to_token_stream())?;
-
-		Ok(Self { index, attr_span, ident: item.ident.clone() })
+	if let Ok(target) = std::env::var("CARGO_MANIFEST_DIR") {
+		println!("cargo:rustc-env=TARGET={}", target);
 	}
 }

@@ -1,13 +1,35 @@
-use std::collections::HashMap;
+/* -------------------------------------------------------- *\
+ *                                                          *
+ *      ███╗░░░███╗░█████╗░░██████╗██╗░░██╗██╗███╗░░██╗     *
+ *      ████╗░████║██╔══██╗██╔════╝██║░░██║██║████╗░██║     *
+ *      ██╔████╔██║███████║╚█████╗░███████║██║██╔██╗██║     *
+ *      ██║╚██╔╝██║██╔══██║░╚═══██╗██╔══██║██║██║╚████║     *
+ *      ██║░╚═╝░██║██║░░██║██████╔╝██║░░██║██║██║░╚███║     *
+ *      ╚═╝░░░░░╚═╝╚═╝░░╚═╝╚═════╝░╚═╝░░╚═╝╚═╝╚═╝░░╚══╝     *
+ *                                         by Nutshimit     *
+ * -------------------------------------------------------- *
+ *                                                          *
+ *   This file is dual-licensed as Apache-2.0 or GPL-3.0.   *
+ *   see LICENSE for license details.                       *
+ *                                                          *
+\* ---------------------------------------------------------*/
 
-use crate::provider::parse::Def;
-use darling::{FromMeta, ToTokens};
-use quote::quote;
-use syn::{Attribute, Item, Meta};
+use crate::provider::{
+	expand::helper::process_struct,
+	parse::{Def, InternalMashinType},
+};
+use quote::{format_ident, quote};
+use syn::{Item, Meta};
 
 pub fn expand_resources(def: &mut Def) -> proc_macro2::TokenStream {
-    let resources = def.resources.iter().map(|resource| {
+	// process all resources, need to be done before we overwrite the output
+	for res in def.resources.clone() {
+		process_struct(def, res.index, InternalMashinType::Resource(res)).expect("valid ts");
+	}
+
+	let resources = def.resources.iter().map(|resource| {
         let mut resource_item = {
+
                 let item = &mut def.item.content.as_mut().expect("Checked by def parser").1[resource.index];
                 let item_cloned = item.clone();
                 *item = Item::Verbatim(quote::quote!());
@@ -28,7 +50,7 @@ pub fn expand_resources(def: &mut Def) -> proc_macro2::TokenStream {
 
             let mut sensitive = false;
             let mut attr_id = 0;
-            
+
             for attribute in field.attrs.clone() {
                 if let Ok(Meta::Path(path)) = attribute.parse_meta() {
                     if path.is_ident("sensitive") {
@@ -38,13 +60,13 @@ pub fn expand_resources(def: &mut Def) -> proc_macro2::TokenStream {
                     attr_id += 1;
                 }
             }
-      
+
 
             let field_name = name.to_string();
             let field_json = quote! {
                 &::mashin_sdk::ext::serde_json::json! {
                     {
-                        "__value": self.#name.clone(),
+                        "__value": self.#name,
                         "__sensitive": #sensitive,
                     }
                 }
@@ -69,11 +91,11 @@ pub fn expand_resources(def: &mut Def) -> proc_macro2::TokenStream {
 
         ["__urn", "__config", "__name"].iter().for_each(|item| {
             let ident = quote::format_ident!("{}", item);
-            let serializer = quote! { 
+            let serializer = quote! {
                 state.serialize_field(#item,
                     &::mashin_sdk::ext::serde_json::json! {
                         {
-                            "__value": self.#ident.clone(),
+                            "__value": self.#ident,
                             "__sensitive": false,
                         }
                     }
@@ -86,7 +108,8 @@ pub fn expand_resources(def: &mut Def) -> proc_macro2::TokenStream {
         let vis = &resource_item.vis;
         let fields = resource_item.fields.iter().collect::<Vec<_>>();
         let config_ident = &resource.config;
-     
+        let test_ident = format_ident!("__{}", resource_ident.to_string().to_lowercase());
+
         quote! {
 
           #[derive(Default, Debug, Clone, PartialEq, ::mashin_sdk::ext::serde::Deserialize)]
@@ -115,6 +138,7 @@ pub fn expand_resources(def: &mut Def) -> proc_macro2::TokenStream {
              where
                  S: serde::Serializer,
              {
+                 use ::serde::ser::SerializeStruct as _;
                  let mut state = serializer.serialize_struct(#resource_name_str, #total_fields)?;
                  #( #fields_json )*
                  state.end()
@@ -131,10 +155,10 @@ pub fn expand_resources(def: &mut Def) -> proc_macro2::TokenStream {
                             ..Default::default()
                         }
                 }
- 
+
                 fn __set_config_from_value(&mut self, config: &::std::rc::Rc<::mashin_sdk::ext::serde_json::Value>) {
                     let config = config.as_ref().clone();
-                    self.__config = ::mashin_sdk::ext::serde_json::from_value::<BucketConfig>(config).unwrap_or_default();
+                    self.__config = ::mashin_sdk::ext::serde_json::from_value::<#config_ident>(config).unwrap_or_default();
                 }
 
                 fn name(&self) -> &str {
@@ -145,10 +169,25 @@ pub fn expand_resources(def: &mut Def) -> proc_macro2::TokenStream {
                     self.__urn.as_str()
                 }
            }
+
+           #[cfg(test)]
+           mod #test_ident {
+               use super::*;
+               use ::mashin_sdk::ext::tokio;
+               use ::mashin_sdk::ProviderBuilder;
+
+               #[test]
+               fn build_successfully() -> () {
+                   let resource = #resource_ident::default();
+                   assert_eq!(resource.__name, "");
+                   assert_eq!(resource.__urn, "");
+                   assert_eq!(resource.__config, #config_ident::default());
+               }
+           }
         }
     }).collect::<Vec<_>>();
 
-    quote::quote! {
-        #( #resources )*
-    }
+	quote::quote! {
+		#( #resources )*
+	}
 }

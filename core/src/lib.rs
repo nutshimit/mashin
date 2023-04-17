@@ -1,22 +1,37 @@
-use std::{collections::HashMap, ffi::c_void, rc::Rc};
+/* -------------------------------------------------------- *\
+ *                                                          *
+ *      ███╗░░░███╗░█████╗░░██████╗██╗░░██╗██╗███╗░░██╗     *
+ *      ████╗░████║██╔══██╗██╔════╝██║░░██║██║████╗░██║     *
+ *      ██╔████╔██║███████║╚█████╗░███████║██║██╔██╗██║     *
+ *      ██║╚██╔╝██║██╔══██║░╚═══██╗██╔══██║██║██║╚████║     *
+ *      ██║░╚═╝░██║██║░░██║██████╔╝██║░░██║██║██║░╚███║     *
+ *      ╚═╝░░░░░╚═╝╚═╝░░╚═╝╚═════╝░╚═╝░░╚═╝╚═╝╚═╝░░╚══╝     *
+ *                                         by Nutshimit     *
+ * -------------------------------------------------------- *
+ *                                                          *
+ *   This file is dual-licensed as Apache-2.0 or GPL-3.0.   *
+ *   see LICENSE for license details.                       *
+ *                                                          *
+\* ---------------------------------------------------------*/
+
+pub use crate::{
+	backend::BackendState,
+	client::{
+		ExecutedResource, ExecutedResources, MashinEngine, RegisteredProvider, RegisteredProviders,
+	},
+	ffi::{DynamicLibraryResource, ForeignFunction, NativeType, NativeValue, Symbol},
+	state::{EncryptedState, FileState, ProjectState, RawState, StateHandler},
+};
+pub use mashin_sdk as sdk;
+pub(crate) use sdk::Result;
+use std::ffi::c_void;
 
 mod backend;
 mod client;
 pub mod colors;
-mod config;
 mod ffi;
+pub mod mashin_dir;
 mod state;
-
-pub use crate::{
-    backend::BackendState,
-    client::{
-        ExecutedResource, ExecutedResources, MashinEngine, RegisteredProvider, RegisteredProviders,
-    },
-    ffi::{DynamicLibraryResource, ForeignFunction, NativeType, NativeValue, Symbol},
-    state::{EncryptedState, FileState, ProjectState, RawState, StateHandler},
-};
-pub use mashin_sdk as sdk;
-pub(crate) use sdk::Result;
 
 #[macro_export]
 macro_rules! log {
@@ -30,13 +45,13 @@ macro_rules! log {
 
 #[derive(Clone)]
 pub struct ProviderInner {
-    pub name: String,
-    pub provider: *mut c_void,
-    pub drop_fn: Symbol,
+	pub name: String,
+	pub provider: *mut c_void,
+	pub drop_fn: Symbol,
 }
 
 #[derive(Clone)]
 pub struct StateInner {
-    pub get_symbol: Symbol,
-    pub save_symbol: Symbol,
+	pub get_symbol: Symbol,
+	pub save_symbol: Symbol,
 }

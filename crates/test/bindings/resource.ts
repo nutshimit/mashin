@@ -1,6 +1,5 @@
 import * as resource from "../../../sdk/ts/resource.ts";
 import { Inputs, Input, Output, Outputs } from "../../../sdk/ts/output.ts";
-import { lib } from "./ffi.ts";
 
 export interface BucketInputs extends Inputs {
   acl?: Input<
