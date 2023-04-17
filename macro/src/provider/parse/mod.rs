@@ -1,9 +1,23 @@
-use std::collections::HashMap;
-pub use ts::{InternalMashinType, TsType};
-
-use syn::spanned::Spanned;
+/* -------------------------------------------------------- *\
+ *                                                          *
+ *      ███╗░░░███╗░█████╗░░██████╗██╗░░██╗██╗███╗░░██╗     *
+ *      ████╗░████║██╔══██╗██╔════╝██║░░██║██║████╗░██║     *
+ *      ██╔████╔██║███████║╚█████╗░███████║██║██╔██╗██║     *
+ *      ██║╚██╔╝██║██╔══██║░╚═══██╗██╔══██║██║██║╚████║     *
+ *      ██║░╚═╝░██║██║░░██║██████╔╝██║░░██║██║██║░╚███║     *
+ *      ╚═╝░░░░░╚═╝╚═╝░░╚═╝╚═════╝░╚═╝░░╚═╝╚═╝╚═╝░░╚══╝     *
+ *                                         by Nutshimit     *
+ * -------------------------------------------------------- *
+ *                                                          *
+ *   This file is dual-licensed as Apache-2.0 or GPL-3.0.   *
+ *   see LICENSE for license details.                       *
+ *                                                          *
+\* ---------------------------------------------------------*/
 
 use super::ProviderMetadataArgs;
+use std::collections::HashMap;
+use syn::spanned::Spanned;
+pub use ts::{InternalMashinType, TsType};
 
 mod builder;
 mod config;

@@ -1,19 +1,33 @@
+/* -------------------------------------------------------- *\
+ *                                                          *
+ *      ███╗░░░███╗░█████╗░░██████╗██╗░░██╗██╗███╗░░██╗     *
+ *      ████╗░████║██╔══██╗██╔════╝██║░░██║██║████╗░██║     *
+ *      ██╔████╔██║███████║╚█████╗░███████║██║██╔██╗██║     *
+ *      ██║╚██╔╝██║██╔══██║░╚═══██╗██╔══██║██║██║╚████║     *
+ *      ██║░╚═╝░██║██║░░██║██████╔╝██║░░██║██║██║░╚███║     *
+ *      ╚═╝░░░░░╚═╝╚═╝░░╚═╝╚═════╝░╚═╝░░╚═╝╚═╝╚═╝░░╚══╝     *
+ *                                         by Nutshimit     *
+ * -------------------------------------------------------- *
+ *                                                          *
+ *   This file is dual-licensed as Apache-2.0 or GPL-3.0.   *
+ *   see LICENSE for license details.                       *
+ *                                                          *
+\* ---------------------------------------------------------*/
+
 use super::{diff::diff, trim_sensitive, StateDiff};
-use crate::{
-	sdk::{
-		ext::{
-			anyhow::anyhow,
-			serde::{
-				de::{self, Visitor},
-				Deserialize, Deserializer, Serialize, Serializer,
-			},
-			serde_json::Value,
-		},
-		Urn,
-	},
-	Result,
-};
+use crate::Result;
 use base64::{engine::general_purpose, Engine as _};
+use mashin_sdk::{
+	ext::{
+		anyhow::anyhow,
+		serde::{
+			de::{self, Visitor},
+			Deserialize, Deserializer, Serialize, Serializer,
+		},
+		serde_json::Value,
+	},
+	Urn,
+};
 use sodiumoxide::crypto::{pwhash, secretbox};
 use std::{collections::BTreeSet, fmt};
 

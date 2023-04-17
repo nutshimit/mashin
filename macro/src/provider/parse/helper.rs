@@ -1,10 +1,25 @@
+/* -------------------------------------------------------- *\
+ *                                                          *
+ *      ███╗░░░███╗░█████╗░░██████╗██╗░░██╗██╗███╗░░██╗     *
+ *      ████╗░████║██╔══██╗██╔════╝██║░░██║██║████╗░██║     *
+ *      ██╔████╔██║███████║╚█████╗░███████║██║██╔██╗██║     *
+ *      ██║╚██╔╝██║██╔══██║░╚═══██╗██╔══██║██║██║╚████║     *
+ *      ██║░╚═╝░██║██║░░██║██████╔╝██║░░██║██║██║░╚███║     *
+ *      ╚═╝░░░░░╚═╝╚═╝░░╚═╝╚═════╝░╚═╝░░╚═╝╚═╝╚═╝░░╚══╝     *
+ *                                         by Nutshimit     *
+ * -------------------------------------------------------- *
+ *                                                          *
+ *   This file is dual-licensed as Apache-2.0 or GPL-3.0.   *
+ *   see LICENSE for license details.                       *
+ *                                                          *
+\* ---------------------------------------------------------*/
+
 use darling::ToTokens;
 
 pub trait MutItemAttrs {
 	fn mut_item_attrs(&mut self) -> Option<&mut Vec<syn::Attribute>>;
 }
 
-/// Take all the pallet attributes (e.g. attribute like `#[provider..]`) and decode them to `Attr`
 pub fn _take_item_provider_attrs<Attr>(item: &mut impl MutItemAttrs) -> syn::Result<Vec<Attr>>
 where
 	Attr: syn::parse::Parse,
@@ -18,18 +33,14 @@ where
 	Ok(pallet_attrs)
 }
 
-/// Take the first pallet attribute (e.g. attribute like `#[provider..]`) and decode it to `Attr`
+/// Take the first mashin attribute (e.g. attribute like `#[mashin..]`) and decode it to `Attr`
 pub fn take_first_item_provider_attr<Attr>(
 	item: &mut impl MutItemAttrs,
 ) -> syn::Result<Option<Attr>>
 where
 	Attr: syn::parse::Parse,
 {
-	let attrs = if let Some(attrs) = item.mut_item_attrs() {
-		attrs
-	} else {
-		return Ok(None)
-	};
+	let attrs = if let Some(attrs) = item.mut_item_attrs() { attrs } else { return Ok(None) };
 
 	if let Some(index) = attrs.iter().position(|attr| {
 		attr.path.segments.first().map_or(false, |segment| segment.ident == "mashin")
