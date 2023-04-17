@@ -1,4 +1,7 @@
-use crate::{EncryptedState, FileState, Result, StateHandler, StateInner};
+use crate::{
+    mashin_dir::{self, MashinDir},
+    EncryptedState, FileState, Result, StateHandler, StateInner,
+};
 use mashin_sdk::Urn;
 use std::collections::BTreeSet;
 
@@ -7,13 +10,10 @@ pub enum BackendState {
     Plugin(StateInner),
 }
 
-impl Default for BackendState {
-    fn default() -> Self {
-        BackendState::Local(Default::default())
-    }
-}
-
 impl BackendState {
+    pub fn new(mashin_dir: &MashinDir) -> Result<Self> {
+        Ok(Self::Local(FileState::new(mashin_dir.state_folder_path())?))
+    }
     pub fn save(&self, urn: &Urn, state: &EncryptedState) -> Result<()> {
         match self {
             BackendState::Local(local) => local.save(&urn, state),

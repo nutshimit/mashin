@@ -3,7 +3,7 @@ use syn::spanned::Spanned;
 
 use super::helper;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ResourceDef {
     pub name: String,
     pub config: syn::Ident,
@@ -73,7 +73,7 @@ impl ResourceImplDef {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ResourceConfigDef {
     pub index: usize,
     /// The span of the pallet::builder attribute.

@@ -1,12 +1,16 @@
+use std::{env, fs::OpenOptions, io::Write, path::Path};
+
 use super::parse::Def;
 use quote::ToTokens;
 
 mod builder;
 mod config;
+mod helper;
 mod provider;
 mod resource;
 mod resource_config;
 mod resource_impl;
+mod ts;
 
 pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
     let provider = provider::expand_provider(&mut def);
@@ -15,9 +19,11 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
     let resources = resource::expand_resources(&mut def);
     let resources_impl = resource_impl::expand_resource_impl(&mut def);
     let resources_config = resource_config::expand_resource_config(&mut def);
+    let extra_ts = ts::expand_ts(&mut def);
+
+    ts::export_ts(&mut def);
 
     let new_items = quote::quote!(
-        use ::serde::ser::SerializeStruct as _;
         static __MASHIN_LOG_INIT: ::std::sync::Once = std::sync::Once::new();
 
         #provider
@@ -26,8 +32,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
         #resources
         #resources_impl
         #resources_config
-
-
+        #extra_ts
     );
 
     def.item

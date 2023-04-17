@@ -16,3 +16,7 @@ syn = "1.0.109"
 darling = "0.14.4"
 quote = "1.0"
 proc-macro2 = "1.0.56"
+Inflector = "0.11.4"
+
+serde.workspace = true
+serde_json.workspace = true

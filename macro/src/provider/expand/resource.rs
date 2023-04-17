@@ -1,13 +1,19 @@
 use std::collections::HashMap;
 
-use crate::provider::parse::Def;
+use crate::provider::{parse::{Def, InternalMashinType}, expand::helper::process_struct};
 use darling::{FromMeta, ToTokens};
 use quote::quote;
 use syn::{Attribute, Item, Meta};
 
 pub fn expand_resources(def: &mut Def) -> proc_macro2::TokenStream {
+    // process all resources, need to be done before we overwrite the output
+    for res in def.resources.clone() {
+        process_struct(def, res.index, InternalMashinType::Resource(res.clone())).expect("valid ts");
+    }
+
     let resources = def.resources.iter().map(|resource| {
         let mut resource_item = {
+
                 let item = &mut def.item.content.as_mut().expect("Checked by def parser").1[resource.index];
                 let item_cloned = item.clone();
                 *item = Item::Verbatim(quote::quote!());
@@ -115,6 +121,7 @@ pub fn expand_resources(def: &mut Def) -> proc_macro2::TokenStream {
              where
                  S: serde::Serializer,
              {
+                 use ::serde::ser::SerializeStruct as _;
                  let mut state = serializer.serialize_struct(#resource_name_str, #total_fields)?;
                  #( #fields_json )*
                  state.end()

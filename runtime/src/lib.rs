@@ -1,6 +1,9 @@
 use anyhow::{anyhow, bail, Result};
+use cache::{get_source_from_bytes, HttpCache, SourceFile};
 use deno_ast::{MediaType, ParseParams, SourceTextInfo};
-use deno_core::futures::FutureExt;
+use deno_core::error::uri_error;
+use deno_core::futures::{self, FutureExt};
+use deno_core::parking_lot::Mutex;
 use deno_core::serde_json::json;
 use deno_core::{
     include_js_files, resolve_import, resolve_path, Extension, JsRuntime, ModuleCode, ModuleLoader,
@@ -11,21 +14,29 @@ use deno_fetch::FetchPermissions;
 use deno_web::BlobStore;
 use deno_web::TimersPermission;
 use deno_websocket::WebSocketPermissions;
+use http_client::{fetch_once, FetchOnceArgs, FetchOnceResult, HttpClient};
 pub use mashin_core::colors;
+use mashin_core::mashin_dir::MashinDir;
 pub use mashin_core::sdk::{ResourceAction, Urn};
 pub use mashin_core::ExecutedResource;
 use mashin_core::{BackendState, ExecutedResources, MashinEngine};
 use reqwest::Url;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::env::current_dir;
 use std::ffi::c_void;
+use std::fs;
+use std::future::Future;
+use std::io::{BufReader, Read};
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::rc::Rc;
+use std::sync::Arc;
 
 mod builtin;
+mod cache;
+mod http_client;
 
 #[macro_export]
 macro_rules! log {
@@ -84,6 +95,7 @@ pub struct Runtime {
     main_module: String,
     command: RuntimeCommand,
     raw_args: Vec<String>,
+    mashin_dir: MashinDir,
 }
 
 pub struct RuntimeResult {
@@ -116,7 +128,14 @@ impl Runtime {
         raw_args: Vec<String>,
         executed_resources: Option<Rc<RefCell<ExecutedResources>>>,
     ) -> Result<Self> {
+        let mashin_dir = MashinDir::new(None)?;
         let is_first_run = executed_resources.is_none();
+        let backend_state = BackendState::new(&mashin_dir)?;
+        let http_cache = HttpCache::new(&mashin_dir.deps_folder_path());
+        let http_client = HttpClient::new(http_cache, None)?;
+        let isolated_mashin_dir = mashin_dir.clone();
+        let isolated_http_client = http_client.clone();
+
         let extension = Extension::builder("mashin_core")
             .esm(include_js_files!(
                 mashin_core dir "js",
@@ -130,12 +149,13 @@ impl Runtime {
             .ops(stdlib())
             .state(move |state| {
                 // fixme: init in cli?
-                let backend = Rc::new(RefCell::new(BackendState::default()));
+                let backend = Rc::new(RefCell::new(backend_state));
                 state.put(
                     MashinEngine::new(backend, b"mysuperpassword", executed_resources)
-                        .expect("test"),
+                        .expect("valid engine"),
                 );
-
+                state.put(isolated_mashin_dir);
+                state.put(isolated_http_client);
                 state.put(AllowAllPermissions {});
             })
             .build();
@@ -157,7 +177,9 @@ impl Runtime {
                 ),
                 extension,
             ],
-            module_loader: Some(Rc::new(TypescriptModuleLoader)),
+            module_loader: Some(Rc::new(TypescriptModuleLoader {
+                http_client: Arc::new(http_client),
+            })),
 
             ..Default::default()
         });
@@ -167,6 +189,7 @@ impl Runtime {
             main_module: main_module.to_string(),
             runtime,
             raw_args,
+            mashin_dir,
         };
 
         // bootstrap the engine
@@ -242,22 +265,79 @@ fn stdlib() -> Vec<OpDecl> {
     ops
 }
 
-// From: https://github.com/denoland/deno/blob/main/core/examples/ts_module_loader.rs
-struct TypescriptModuleLoader;
+#[derive(Debug, Clone)]
+struct TypescriptModuleLoader {
+    http_client: Arc<HttpClient>,
+}
 
 impl TypescriptModuleLoader {
-    async fn load_from_remote_url(path: &Url) -> Result<String> {
-        println!("Load: {}", path);
-        let response = reqwest::get(path.clone()).await?;
-        response.text().await.map_err(Into::into)
+    fn load_from_remote_url(
+        &self,
+        path: &ModuleSpecifier,
+        redirect_limit: i64,
+    ) -> Pin<Box<dyn Future<Output = Result<SourceFile>> + Send>> {
+        match self.http_client.cache().fetch_cached(path, redirect_limit) {
+            Ok(Some(file)) => {
+                return futures::future::ok(file).boxed();
+            }
+            Ok(None) => {}
+            Err(err) => {
+                return futures::future::err(err).boxed();
+            }
+        }
+        let http_client = self.http_client.clone();
+        let http_cache = http_client.cache().clone();
+        let file_fetcher = self.clone();
+        let path = path.clone();
+        async move {
+            let res = match fetch_once(
+                &http_client.clone(),
+                FetchOnceArgs {
+                    url: path.clone(),
+                    maybe_accept: None,
+                    maybe_etag: None,
+                },
+            )
+            .await?
+            {
+                FetchOnceResult::NotModified => {
+                    let file = http_cache.fetch_cached(&path, 10)?.unwrap();
+                    Ok(file)
+                }
+                FetchOnceResult::Redirect(redirect_url, headers) => {
+                    http_cache.set(&path, headers, &[])?;
+                    file_fetcher
+                        .load_from_remote_url(&redirect_url, redirect_limit - 1)
+                        .await
+                }
+                FetchOnceResult::Code(bytes, headers) => {
+                    http_cache.set(&path, headers.clone(), &bytes)?;
+                    let file = http_cache.build_remote_file(&path, bytes, &headers)?;
+                    Ok(file)
+                }
+            };
+            res
+        }
+        .boxed()
     }
-    async fn load_from_filesystem(path: &Url) -> Result<String> {
-        std::fs::read_to_string(
-            &path
-                .to_file_path()
-                .map_err(|_| anyhow!("{path:?}: is not a path"))?,
-        )
-        .map_err(Into::into)
+
+    async fn load_from_filesystem(path: &ModuleSpecifier) -> Result<SourceFile> {
+        let local = path
+            .to_file_path()
+            .map_err(|_| uri_error(format!("Invalid file path.\n  Specifier: {path}")))?;
+        let bytes = fs::read(&local)?;
+        let charset = detect_charset(&bytes).to_string();
+        let source = get_source_from_bytes(bytes, Some(charset))?;
+        let media_type = MediaType::from_specifier(path);
+
+        Ok(SourceFile {
+            local,
+            maybe_types: None,
+            media_type,
+            source: source.into(),
+            specifier: path.clone(),
+            maybe_headers: None,
+        })
     }
 }
 
@@ -278,9 +358,25 @@ impl ModuleLoader for TypescriptModuleLoader {
         _is_dyn_import: bool,
     ) -> Pin<Box<ModuleSourceFuture>> {
         let module_specifier = module_specifier.clone();
+        let file_fetcher = self.clone();
+
         async move {
-            let media_type = MediaType::from_str(module_specifier.path());
-            let (module_type, should_transpile) = match media_type {
+            let source_file = match module_specifier.scheme() {
+                "file" => TypescriptModuleLoader::load_from_filesystem(&module_specifier).await?,
+                "https" => {
+                    file_fetcher
+                        .load_from_remote_url(&module_specifier, 10)
+                        .await?
+                }
+                _ => {
+                    return Err(anyhow!(
+                        "Unsupported module specifier: {}",
+                        module_specifier
+                    ))
+                }
+            };
+
+            let (module_type, should_transpile) = match source_file.media_type {
                 MediaType::JavaScript | MediaType::Mjs | MediaType::Cjs => {
                     (ModuleType::JavaScript, false)
                 }
@@ -296,28 +392,18 @@ impl ModuleLoader for TypescriptModuleLoader {
                 _ => bail!("Unknown extension {:?}", module_specifier),
             };
 
-            let code = match module_specifier.scheme() {
-                "file" => TypescriptModuleLoader::load_from_filesystem(&module_specifier).await?,
-                "https" => TypescriptModuleLoader::load_from_remote_url(&module_specifier).await?,
-                _ => {
-                    return Err(anyhow!(
-                        "Unsupported module specifier: {}",
-                        module_specifier
-                    ))
-                }
-            };
             let code = if should_transpile {
                 let parsed = deno_ast::parse_module(ParseParams {
                     specifier: module_specifier.to_string(),
-                    text_info: SourceTextInfo::from_string(code),
-                    media_type,
+                    text_info: SourceTextInfo::from_string(source_file.source.to_string()),
+                    media_type: source_file.media_type,
                     capture_tokens: false,
                     scope_analysis: false,
                     maybe_syntax: None,
                 })?;
                 parsed.transpile(&Default::default())?.text
             } else {
-                code
+                source_file.source.to_string()
             };
             let module = ModuleSource {
                 code: code.into(),
@@ -328,5 +414,19 @@ impl ModuleLoader for TypescriptModuleLoader {
             Ok(module)
         }
         .boxed_local()
+    }
+}
+
+pub fn detect_charset(bytes: &'_ [u8]) -> &'static str {
+    const UTF16_LE_BOM: &[u8] = b"\xFF\xFE";
+    const UTF16_BE_BOM: &[u8] = b"\xFE\xFF";
+
+    if bytes.starts_with(UTF16_LE_BOM) {
+        "utf-16le"
+    } else if bytes.starts_with(UTF16_BE_BOM) {
+        "utf-16be"
+    } else {
+        // Assume everything else is utf-8
+        "utf-8"
     }
 }

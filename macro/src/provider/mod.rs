@@ -1,4 +1,4 @@
-use darling::FromMeta;
+use darling::{FromMeta, ToTokens};
 use proc_macro::TokenStream;
 use syn::{parse_macro_input, spanned::Spanned};
 
@@ -10,11 +10,7 @@ mod parse;
 
 #[derive(Debug, FromMeta)]
 pub struct ProviderMetadataArgs {
-    name: String,
-}
-#[derive(Debug, FromMeta)]
-pub struct ResourceArgs {
-    name: String,
+    github_url: String,
 }
 
 pub fn provider(

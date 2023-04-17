@@ -1,9 +1,13 @@
-use crate::{js_log, log};
+use crate::{
+    fetch_once,
+    http_client::{self, HttpClient},
+    js_log, log, FetchOnceArgs, FetchOnceResult,
+};
 use deno_core::{
     error::{bad_resource_id, type_error, AnyError},
     resolve_path,
     serde_json::{self, Value},
-    OpState, Resource, ResourceId,
+    ModuleSpecifier, OpState, Resource, ResourceId,
 };
 use libffi::middle::Arg;
 use mashin_core::{
@@ -21,6 +25,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     env::{self, current_dir},
     ffi::c_void,
+    path::PathBuf,
     ptr,
     rc::Rc,
     str::FromStr,
@@ -28,6 +33,7 @@ use std::{
     thread::{self, sleep},
     time::{Duration, Instant},
 };
+use tokio::runtime::{Handle, Runtime};
 
 use deno_core::error::generic_error;
 use dlopen::raw::Library;
@@ -177,8 +183,53 @@ pub(crate) fn as__runtime__resource_execute(
     Ok(new_state.generate_ts_output())
 }
 
+#[derive(Default, Deserialize, Debug)]
+pub enum ProviderDownloadSource {
+    #[default]
+    #[serde(rename(deserialize = "github"))]
+    GithubRelease,
+}
+
 #[derive(Deserialize, Debug)]
-pub struct ProviderLoadArgs {
+pub struct ProviderDownloadArgs {
+    provider: ProviderDownloadSource,
+    url: String,
+}
+
+#[deno_core::op]
+pub async fn as__runtime__register_provider__download(
+    op_state_rc: Rc<RefCell<OpState>>,
+    args: ProviderDownloadArgs,
+) -> Result<String> {
+    let provider = &args.provider;
+    let remote_url = &args.url;
+    let op_state = op_state_rc.borrow();
+    let module_specifier = ModuleSpecifier::from_str(remote_url)?;
+    let http_client = op_state.borrow::<HttpClient>();
+
+    let cached_local_path = match provider {
+        ProviderDownloadSource::GithubRelease => {
+            match http_client.cache().fetch_cached_path(&module_specifier, 10) {
+                Ok(Some(cache_filename)) => cache_filename.into_os_string().into_string(),
+                Ok(None) => {
+                    let (remote_data, headers) = http_client
+                        .download_with_headers(module_specifier.clone())
+                        .await?;
+                    let file = http_client
+                        .cache()
+                        .set(&module_specifier, headers, &remote_data)?;
+                    file.into_os_string().into_string()
+                }
+                Err(err) => return Err(err),
+            }
+        }
+    };
+
+    cached_local_path.map_err(|_| anyhow!("Something went wrong with provider cdylib path"))
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ProviderAllocateArgs {
     name: String,
     path: String,
     symbols: HashMap<String, ForeignFunction>,
@@ -188,8 +239,9 @@ pub struct ProviderLoadArgs {
 #[deno_core::op]
 pub fn as__runtime__register_provider__allocate(
     op_state: &mut OpState,
-    args: ProviderLoadArgs,
+    args: ProviderAllocateArgs,
 ) -> Result<()> {
+    println!("INIT PROVIDER");
     let path = args.path;
     let provider_name = args.name;
     let props = args.props;
@@ -294,6 +346,7 @@ pub(crate) fn op_decls() -> Vec<::deno_core::OpDecl> {
         op_get_env::decl(),
         as__client_print::decl(),
         as__client_new::decl(),
+        as__runtime__register_provider__download::decl(),
         as__runtime__register_provider__allocate::decl(),
         as__runtime__resource_execute::decl(),
     ]

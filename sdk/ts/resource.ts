@@ -58,22 +58,21 @@ export abstract class Resource<
   #urn: URN;
   #opts: ResourceOptions;
   #output: O | undefined;
-  #module: Lowercase<string>;
+
   #resource_type: Lowercase<string>;
 
   constructor(
     name: ResourceName<T>,
-    module: Lowercase<string>,
+
     resource_type: Lowercase<string>,
     props: Inputs,
     opts: ResourceOptions
   ) {
     super(name, props);
     // urn:provider:aws:s3:mysuper_bucket
-    this.#module = module;
     this.#resource_type = resource_type;
     this.#opts = opts;
-    this.#urn = `urn:provider:${opts.provider.name}:${this.#module}:${
+    this.#urn = `urn:provider:${opts.provider.name}:${
       this.#resource_type
     }?=${name}`;
 
@@ -88,8 +87,5 @@ export abstract class Resource<
   }
   get data() {
     return this.#output;
-  }
-  get module() {
-    return this.#module;
   }
 }

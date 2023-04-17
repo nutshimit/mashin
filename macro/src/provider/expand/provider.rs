@@ -1,3 +1,5 @@
+use std::env;
+
 use crate::provider::parse::Def;
 use darling::ToTokens;
 use quote::quote;
@@ -21,7 +23,13 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
     let ident = &provider_item.ident;
 
     let fields = provider_item.fields.iter().collect::<Vec<_>>();
-    let provider_target = format!("mashin::provider::{}", def.args.name);
+    let provider_target = format!(
+        "mashin::provider::{}",
+        match env::var("MASHIN_PKG_NAME") {
+            Ok(version) => version,
+            Err(_e) => env!("CARGO_PKG_NAME").to_string(),
+        }
+    );
 
     let resources_map = def.resources.iter().map(|resource| {
         let name = resource.name.clone();

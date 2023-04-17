@@ -3,13 +3,15 @@ use std::{any::Any, cell::RefCell, rc::Rc, sync::Arc};
 pub use crate::urn::Urn;
 pub use anyhow::Result;
 use async_trait::async_trait;
+pub use build::build;
 pub use deserialize::deserialize_state_field;
 pub use logger::CliLogger;
-pub use mashin_macro::{provider, resource};
+pub use mashin_macro::provider;
 pub use provider_state::ProviderState;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+mod build;
 mod deserialize;
 mod logger;
 mod provider_state;

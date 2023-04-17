@@ -15,6 +15,7 @@ use std::{
     ffi::c_void,
     ops::{Deref, DerefMut},
     rc::Rc,
+    sync::Arc,
 };
 
 #[derive(Clone)]

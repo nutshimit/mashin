@@ -1,15 +1,24 @@
-#[mashin_sdk::provider(name = "aws")]
+#[mashin_sdk::provider(github_url = "https://test.com")]
 mod provider {
-
     use mashin_sdk::{ProviderBuilder, ProviderDefault, ResourceDefault, Result};
     use std::sync::Arc;
 
     #[mashin::provider]
     pub struct Provider;
 
-    #[mashin::config]
-    pub struct Config {
+    #[mashin::ts]
+    pub struct ExtraConfig {
         access_key: Option<String>,
+    }
+
+    #[mashin::config]
+    /// This is my config
+    pub struct Config {
+        /// This is a test
+        access_key: Option<String>,
+        /// This is a another test
+        /// with multi line
+        test: Option<ExtraConfig>,
     }
 
     #[mashin::state]

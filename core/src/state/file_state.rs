@@ -32,31 +32,15 @@ impl std::fmt::Debug for FileState {
     }
 }
 
-impl Default for FileState {
-    fn default() -> Self {
-        let path = resolve_path(
-            ".mashin",
-            current_dir().expect("valid current dir").as_path(),
-        )
-        .expect("valid path")
-        .to_file_path()
-        .expect("valid local path");
-
-        let db = Self::new(path.clone()).expect("valid init").db;
-        Self { path, db }
-    }
-}
-
 impl FileState {
-    pub fn new(path: PathBuf) -> Result<Self> {
-        let db_path = path.join("state");
+    pub fn new(db_path: PathBuf) -> Result<Self> {
         fs::create_dir_all(&db_path)?;
 
         let mut manager = Manager::<SafeModeEnvironment>::singleton().write().unwrap();
         let db = manager
             .get_or_create(db_path.as_path(), Rkv::new::<SafeMode>)
             .unwrap();
-        Ok(Self { db, path })
+        Ok(Self { db, path: db_path })
     }
 }
 

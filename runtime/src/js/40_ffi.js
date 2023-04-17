@@ -2,6 +2,13 @@ import { pathFromURL } from "ext:deno_web/00_infra.js";
 const core = globalThis.Deno.core;
 const ops = core.ops;
 
+async function downloadProvider(provider, url) {
+  return await core.opAsync("as__runtime__register_provider__download", {
+    provider,
+    url,
+  });
+}
+
 class DynamicProvider {
   constructor(name, path, props) {
     ops.as__runtime__register_provider__allocate({
@@ -40,4 +47,4 @@ class DynamicResource {
   }
 }
 
-export { DynamicProvider, DynamicResource };
+export { DynamicProvider, DynamicResource, downloadProvider };

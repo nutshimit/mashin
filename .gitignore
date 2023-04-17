@@ -3,3 +3,4 @@ mashin_core/lib*
 mashin_core/node_modules*
 **/gen/
 .mashin
+mod.lock

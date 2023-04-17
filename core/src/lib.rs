@@ -5,6 +5,7 @@ mod client;
 pub mod colors;
 mod config;
 mod ffi;
+pub mod mashin_dir;
 mod state;
 
 pub use crate::{

@@ -1,3 +1,4 @@
+use super::helper::process_struct;
 use crate::provider::parse::Def;
 use darling::ToTokens;
 use quote::quote;

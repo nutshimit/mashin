@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+pub use ts::{InternalMashinType, TsType};
+
 use darling::FromField;
 use syn::{
     spanned::Spanned,
@@ -12,6 +15,7 @@ mod helper;
 mod provider;
 mod resource;
 mod state;
+mod ts;
 
 /// Parsed definition of a provider.
 #[derive(Debug)]
@@ -25,6 +29,8 @@ pub struct Def {
     pub resources: Vec<resource::ResourceDef>,
     pub resources_impl: Vec<resource::ResourceImplDef>,
     pub resources_config: Vec<resource::ResourceConfigDef>,
+    pub extra_ts: Vec<ts::TsDef>,
+    pub type_defs: HashMap<String, TsType>,
 }
 
 impl Def {
@@ -46,6 +52,7 @@ impl Def {
         let mut resources = vec![];
         let mut resources_impl = vec![];
         let mut resources_config = vec![];
+        let mut extra_ts = vec![];
 
         for (index, item) in items.iter_mut().enumerate() {
             let provider_attr: Option<ProviderAttr> = helper::take_first_item_provider_attr(item)?;
@@ -73,6 +80,9 @@ impl Def {
                 Some(ProviderAttr::ResourceConfig(span)) => {
                     resources_config.push(resource::ResourceConfigDef::try_from(span, index, item)?)
                 }
+                Some(ProviderAttr::Ts(span)) => {
+                    extra_ts.push(ts::TsDef::try_from(span, index, item)?)
+                }
                 Some(attr) => {
                     let msg = "Invalid duplicated attribute";
                     return Err(syn::Error::new(attr.span(), msg));
@@ -87,6 +97,8 @@ impl Def {
             resources,
             resources_impl,
             resources_config,
+            extra_ts,
+            type_defs: Default::default(),
             provider: provider
                 .ok_or_else(|| syn::Error::new(item_span, "Missing `#[mashin::resource]`"))?,
             config: config
@@ -110,6 +122,7 @@ mod keyword {
     syn::custom_keyword!(builder);
     syn::custom_keyword!(name);
     syn::custom_keyword!(resource_config);
+    syn::custom_keyword!(ts);
 }
 
 #[derive(Debug)]
@@ -121,6 +134,7 @@ enum ProviderAttr {
     ResourceImpl(proc_macro2::Span),
     ResourceConfig(proc_macro2::Span),
     Builder(proc_macro2::Span),
+    Ts(proc_macro2::Span),
 }
 
 impl ProviderAttr {
@@ -133,6 +147,7 @@ impl ProviderAttr {
             Self::ResourceConfig(span) => *span,
             Self::State(span) => *span,
             Self::Builder(span) => *span,
+            Self::Ts(span) => *span,
         }
     }
 }
@@ -171,6 +186,8 @@ impl syn::parse::Parse for ProviderAttr {
             return Ok(ProviderAttr::ResourceConfig(
                 content.parse::<keyword::resource_config>()?.span(),
             ));
+        } else if lookahead.peek(keyword::ts) {
+            return Ok(ProviderAttr::Ts(content.parse::<keyword::ts>()?.span()));
         } else if lookahead.peek(keyword::resource) {
             let resource = content.parse::<keyword::resource>()?.span();
             if content.peek(syn::token::Paren) {
