@@ -1,3 +1,3 @@
 fn main() {
-    mashin_sdk::build();
+	mashin_sdk::build();
 }
