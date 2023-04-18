@@ -36,13 +36,12 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 	let ident = &provider_item.ident;
 
 	let fields = provider_item.fields.iter().collect::<Vec<_>>();
-	let provider_target = format!(
-		"mashin::provider::{}",
-		match env::var("MASHIN_PKG_NAME") {
-			Ok(version) => version,
-			Err(_e) => env!("CARGO_PKG_NAME").to_string(),
-		}
-	);
+	let provider_name = match env::var("MASHIN_PKG_NAME") {
+		Ok(version) => version,
+		Err(_e) => env!("CARGO_PKG_NAME").to_string(),
+	};
+
+	let provider_target = format!("mashin::provider::{}", provider_name);
 
 	let resources_map = def.resources.iter().map(|resource| {
 		let name = resource.name.clone();
@@ -130,11 +129,14 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 
 		#[no_mangle]
-		pub extern "C" fn new(
+		pub extern "C" fn new<'sym>(
 			logger_ptr: *mut &'static ::mashin_sdk::CliLogger,
 			args_ptr: *const u8,
 			args_length: usize,
 		) -> *mut #ident {
+			let buf = unsafe { ::std::slice::from_raw_parts(args_ptr, args_length) };
+			let args = ::mashin_sdk::ext::serde_json::from_slice(buf).expect("valid buffer for `new` args");
+
 			__MASHIN_LOG_INIT.call_once(|| {
 				let logger = unsafe {
 					Box::from_raw(logger_ptr)
@@ -146,74 +148,78 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 				setup_panic_hook();
 			});
 
-			let buf = unsafe { ::std::slice::from_raw_parts(args_ptr, args_length) };
-			let args = ::mashin_sdk::ext::serde_json::from_slice(buf).expect("valid buffer");
+			fn __execute(args: ::mashin_sdk::ext::serde_json::Value) -> #ident {
+				let runtime = ::mashin_sdk::ext::tokio::runtime::Runtime::new().expect("New runtime");
+				let mut provider = #ident::default();
+				provider.update_config(args).expect("valid config");
+				runtime.block_on(provider.build()).expect("valid provider");
+				provider
+			}
 
-			let runtime = ::mashin_sdk::ext::tokio::runtime::Runtime::new().expect("New runtime");
-			let mut provider = #ident::default();
-			provider.update_config(args).expect("valid config");
-			runtime.block_on(provider.build()).expect("valid provider");
-			let static_ref = Box::new(provider);
-
-
-			Box::into_raw(static_ref)
+			let result = __execute(args);
+			Box::into_raw(Box::new(result))
 		}
 
 		#[no_mangle]
-		pub extern "C" fn run(
+		pub extern "C" fn run<'sym>(
 			handle_ptr: *mut #ident,
 			args_ptr: *const u8,
 			args_length: usize,
 		) -> *const u8 {
-			let runtime = ::mashin_sdk::ext::tokio::runtime::Runtime::new().expect("New runtime");
-
-			let buf = unsafe { ::std::slice::from_raw_parts(args_ptr, args_length) };
-			let args: ::mashin_sdk::ResourceArgs = ::mashin_sdk::ext::serde_json::from_slice(buf).expect("valid buffer");
-
-			// grab current provider
 			assert!(!handle_ptr.is_null());
+			let buf = unsafe { ::std::slice::from_raw_parts(args_ptr, args_length) };
+			let args = ::mashin_sdk::ext::serde_json::from_slice(buf).expect("valid buffer");
 			let provider = unsafe { &mut *handle_ptr };
-			let provider_state = provider.state_as_ref();
 
-			let urn = &args.urn;
-			let raw_config = &args.raw_config.clone();
-			let raw_state = &args.raw_state.clone();
+			fn __execute(
+				provider: &mut dyn mashin_sdk::Provider,
+				args: ::mashin_sdk::ResourceArgs
+			) -> Vec<u8> {
+				let runtime = ::mashin_sdk::ext::tokio::runtime::Runtime::new().expect("New runtime");
+				let provider_state = provider.state_as_ref();
+				let urn = &args.urn;
+				let raw_config = &args.raw_config.clone();
+				let raw_state = &args.raw_state.clone();
 
-			let resource = provider
-				.__from_current_state(urn, raw_state)
-				.expect("Valid resource");
+				let resource = provider
+					.__from_current_state(urn, raw_state)
+					.expect("valid raw state");
 
-			let mut resource = resource.borrow_mut();
+				let mut resource = resource.borrow_mut();
 
-			// grab the state before applying our values
-			resource.__set_config_from_value(raw_config);
+				// grab the state before applying our values
+				resource.__set_config_from_value(raw_config);
 
-			runtime
-				.block_on(async {
-					match args.action.as_ref() {
-						::mashin_sdk::ResourceAction::Update { diff } => resource.update(provider_state, diff),
-						::mashin_sdk::ResourceAction::Create => resource.create(provider_state),
-						::mashin_sdk::ResourceAction::Delete => resource.delete(provider_state),
-						::mashin_sdk::ResourceAction::Get => resource.get(provider_state),
-					}
-					.await
-				})
-				.expect("valid execution");
+				runtime
+					.block_on(async {
+						match args.action.as_ref() {
+							::mashin_sdk::ResourceAction::Update { diff } => resource.update(provider_state, diff),
+							::mashin_sdk::ResourceAction::Create => resource.create(provider_state),
+							::mashin_sdk::ResourceAction::Delete => resource.delete(provider_state),
+							::mashin_sdk::ResourceAction::Get => resource.get(provider_state),
+						}
+						.await
+					})
+					.expect("valid execution");
 
-			let state = resource.to_raw_state().expect("valid resource");
-			let result = ::mashin_sdk::ResourceResult::new(state);
-			let json = ::mashin_sdk::ext::serde_json::to_string(&result).expect("valid `ResourceResult`");
-			let encoded = json.into_bytes();
-			let length = (encoded.len() as u32).to_be_bytes();
-			let mut v = length.to_vec();
-			v.extend(encoded.clone());
-			let ret = v.as_ptr();
-			::std::mem::forget(v);
+				let state = resource.to_raw_state().expect("valid resource");
+				let result = ::mashin_sdk::ResourceResult::new(state);
+				let json = ::mashin_sdk::ext::serde_json::to_string(&result).expect("valid `ResourceResult`");
+				let encoded = json.into_bytes();
+				let length = (encoded.len() as u32).to_be_bytes();
+				let mut v = length.to_vec();
+				v.extend(encoded.clone());
+				v
+			}
+
+			let result = __execute(provider, args);
+			let ret = result.as_ptr();
+			::std::mem::forget(result);
 			ret
 		}
 
 		#[no_mangle]
-		pub extern "C" fn drop(handle: *mut #ident) {
+		pub extern "C" fn drop<'sym>(handle: *mut #ident) {
 			assert!(!handle.is_null());
 			unsafe {
 				std::ptr::drop_in_place(handle);
@@ -233,6 +239,7 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 				eprintln!();
 				eprintln!("Platform: {} {}", std::env::consts::OS, std::env::consts::ARCH);
 				eprintln!("Version: {}", std::env!("CARGO_PKG_VERSION"));
+				eprintln!("Provider: {}", provider_name);
 				eprintln!("Args: {:?}", std::env::args().collect::<Vec<_>>());
 				eprintln!();
 				orig_hook(panic_info);

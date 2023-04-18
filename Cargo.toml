@@ -41,7 +41,7 @@ env_logger = "0.10.0"
 urn = {version = "0.5.1", features = ["serde"] }
 
 # mashin
-mashin_core = { version = "0.1.2", path = "./core" }
-mashin_runtime = { version = "0.1.2", path = "./runtime" }
-mashin_sdk = { version = "0.1.2", path = "./sdk/rust" }
-mashin_macro = { version = "0.1.2", path = "./macro" }
+mashin_core = { version = "0.1.3", path = "./core" }
+mashin_runtime = { version = "0.1.3", path = "./runtime" }
+mashin_sdk = { version = "0.1.3", path = "./sdk/rust" }
+mashin_macro = { version = "0.1.3", path = "./macro" }
