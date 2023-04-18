@@ -89,7 +89,6 @@ pub(crate) fn as__runtime__resource_execute(
 
 	let backend = mashin.state_handler.borrow();
 	let providers = mashin.providers.borrow();
-
 	let provider = providers.get(&provider_name).ok_or(anyhow!("provider initialized"))?;
 
 	let raw_state = Rc::new(RefCell::new(
@@ -101,13 +100,6 @@ pub(crate) fn as__runtime__resource_execute(
 			.inner()
 			.clone(),
 	));
-
-	let args_pointer = Rc::into_raw(Rc::new(ResourceArgs {
-		action: Rc::new(expected_resource_action.clone()),
-		raw_config,
-		raw_state: raw_state.clone(),
-		urn: urn.clone(),
-	}));
 
 	// launch a new thread to display the log if it take more than 5 seconds
 	// eg; aws:s3:bucket?=test1234atmos001: Refreshing... 10s
@@ -130,16 +122,19 @@ pub(crate) fn as__runtime__resource_execute(
 	});
 
 	// call the function
-	let provider_state = provider.dylib.call_resource(provider.ptr, args_pointer as *mut c_void)?;
+	let args = ResourceArgs {
+		action: Rc::new(expected_resource_action.clone()),
+		raw_config,
+		raw_state: raw_state.clone(),
+		urn: urn.clone(),
+	};
+
+	let provider_state = provider.dylib.call_resource(provider.ptr, &args)?;
+	let new_state = provider_state.inner().into();
 
 	// close the log thread
 	tx.send(())?;
 
-	// grab the raw state from the provider job run previously
-	let new_state = unsafe {
-		let state = Rc::from_raw(provider_state);
-		state.inner().into()
-	};
 	// take the current state to compare with the new one
 	let current_state = raw_state.as_ref().take().into();
 
@@ -154,6 +149,7 @@ pub(crate) fn as__runtime__resource_execute(
 
 		executed_resouces.insert(&urn, executed_resource);
 	} else {
+		backend.save(&urn, &new_state.encrypt(&mashin.key)?)?;
 		executed_resouces.remove(&urn);
 	}
 
@@ -282,7 +278,7 @@ pub fn as__runtime__register_provider__allocate(
 
 	// create new provider pointer
 
-	let provider_pointer = resource.call_new(Rc::into_raw(Rc::new(props)) as *mut c_void)?;
+	let provider_pointer = resource.call_new(&props)?;
 
 	let registered_provider = RegisteredProvider { dylib: resource, ptr: provider_pointer };
 

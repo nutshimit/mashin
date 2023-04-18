@@ -19,9 +19,10 @@ use crate::{log, NativeValue, Result};
 use anyhow::anyhow;
 use deno_core::Resource;
 use dlopen::raw::Library;
-use mashin_sdk::ResourceResult;
+use mashin_sdk::{ResourceArgs, ResourceResult};
 use serde::Deserialize;
-use std::{borrow::Cow, collections::HashMap, ffi::c_void, rc::Rc};
+use serde_json::Value;
+use std::{borrow::Cow, collections::HashMap, ffi::c_void, mem, ptr, rc::Rc, slice};
 
 pub struct DynamicLibraryResource {
 	pub lib: Library,
@@ -35,17 +36,31 @@ impl Drop for DynamicLibraryResource {
 }
 
 impl DynamicLibraryResource {
-	pub fn call_new(&self, props_ptr: *mut c_void) -> Result<*mut c_void> {
+	pub fn call_new(&self, props: &Value) -> Result<*mut c_void> {
 		let symbol = self.symbols.get("new").ok_or(anyhow!("valid `drop` symbol"))?;
 
 		let logger_ptr = Box::into_raw(Box::new(log::logger())) as *mut c_void;
+		let (props_ptr, props_length) = {
+			let json = serde_json::to_string(&props)?;
+			let encoded = json.into_bytes();
+			let length = encoded.len();
+			let ret = encoded.as_ptr();
+			::std::mem::forget(encoded);
+			(ret, length)
+		};
 
 		let provider_pointer = unsafe {
 			let call_args = vec![
-				NativeValue { pointer: logger_ptr }.as_arg(symbol.parameter_types.get(0).unwrap()),
-				NativeValue { pointer: props_ptr }.as_arg(symbol.parameter_types.get(1).unwrap()),
+				NativeValue { pointer: logger_ptr }.as_arg(&NativeType::Pointer),
+				NativeValue { pointer: props_ptr as *mut c_void }.as_arg(&NativeType::Pointer),
+				NativeValue { usize_value: props_length }.as_arg(&NativeType::USize),
 			];
+
 			symbol.cif.call::<*mut c_void>(symbol.ptr, &call_args)
+		};
+
+		unsafe {
+			ptr::drop_in_place(props_ptr as *mut u8);
 		};
 
 		Ok(provider_pointer)
@@ -55,8 +70,8 @@ impl DynamicLibraryResource {
 		let symbol = self.symbols.get("drop").ok_or(anyhow!("valid `drop` symbol"))?;
 
 		unsafe {
-			let call_args = vec![NativeValue { pointer: provider_ptr }
-				.as_arg(symbol.parameter_types.get(0).unwrap())];
+			let call_args =
+				vec![NativeValue { pointer: provider_ptr }.as_arg(&NativeType::Pointer)];
 			symbol.cif.call::<()>(symbol.ptr, &call_args);
 		};
 
@@ -66,19 +81,43 @@ impl DynamicLibraryResource {
 	pub fn call_resource(
 		&self,
 		provider_ptr: *mut c_void,
-		args_ptr: *mut c_void,
-	) -> Result<*mut ResourceResult> {
+		args: &ResourceArgs,
+	) -> Result<ResourceResult> {
 		let symbol = self.symbols.get("run").ok_or(anyhow!("valid `run` symbol"))?;
 
-		let res = unsafe {
-			let call_args = vec![
-				NativeValue { pointer: provider_ptr }.as_arg(&NativeType::Pointer),
-				NativeValue { pointer: args_ptr }.as_arg(&NativeType::Pointer),
-			];
-			symbol.cif.call::<*mut ResourceResult>(symbol.ptr, &call_args)
+		let (args_ptr, args_length) = {
+			let json = serde_json::to_string(&args)?;
+			let encoded = json.into_bytes();
+			let length = encoded.len();
+			let ret = encoded.as_ptr();
+			mem::forget(encoded);
+			(ret, length)
 		};
 
-		Ok(res)
+		let res_ptr = unsafe {
+			let call_args = vec![
+				NativeValue { pointer: provider_ptr }.as_arg(&NativeType::Pointer),
+				NativeValue { pointer: args_ptr as *mut c_void }.as_arg(&NativeType::Pointer),
+				NativeValue { usize_value: args_length }.as_arg(&NativeType::USize),
+			];
+			symbol.cif.call::<*const u8>(symbol.ptr, &call_args)
+		};
+
+		// we extract the 4 first bytes (u32) that represent the lenght of our result slice
+		let size_of_key = std::mem::size_of::<u32>();
+		let out: &mut [u8; 4] = &mut [0, 0, 0, 0];
+		unsafe { ptr::copy::<u8>(res_ptr, out.as_mut_ptr(), size_of_key) };
+		let args_length = u32::from_be_bytes(*out) as usize;
+
+		// rebuild the slice from the offset and the args length
+		let buf = unsafe { slice::from_raw_parts(res_ptr.add(size_of_key), args_length) };
+
+		unsafe {
+			ptr::drop_in_place(res_ptr as *mut c_void);
+			ptr::drop_in_place(args_ptr as *mut c_void)
+		};
+
+		serde_json::from_slice(buf).map_err(Into::into)
 	}
 }
 

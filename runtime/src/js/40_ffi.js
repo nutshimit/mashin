@@ -16,11 +16,11 @@ class DynamicProvider {
       path: pathFromURL(path),
       symbols: {
         new: {
-          parameters: ["pointer", "pointer"],
+          parameters: ["pointer", "pointer", "usize"],
           result: "pointer",
         },
         run: {
-          parameters: ["pointer", "pointer"],
+          parameters: ["pointer", "pointer", "usize"],
           result: "pointer",
         },
         drop: {

@@ -16,9 +16,10 @@
 
 use crate::Result;
 use anyhow::anyhow;
+use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, str::FromStr};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Urn(urn::Urn);
 
 impl PartialOrd for Urn {

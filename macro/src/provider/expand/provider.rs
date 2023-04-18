@@ -79,8 +79,8 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 				&self.__config
 			}
 
-			pub fn update_config(&mut self, config: ::std::rc::Rc<::mashin_sdk::ext::serde_json::Value>) -> ::mashin_sdk::Result<()> {
-				self.__config = ::mashin_sdk::ext::serde_json::from_value(config.as_ref().clone())?;
+			pub fn update_config(&mut self, config: ::mashin_sdk::ext::serde_json::Value) -> ::mashin_sdk::Result<()> {
+				self.__config = ::mashin_sdk::ext::serde_json::from_value(config)?;
 				Ok(())
 			}
 		}
@@ -132,7 +132,9 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 		#[no_mangle]
 		pub extern "C" fn new(
 			logger_ptr: *mut &'static ::mashin_sdk::CliLogger,
-			args_ptr: *mut ::mashin_sdk::ext::serde_json::Value) -> *mut #ident {
+			args_ptr: *const u8,
+			args_length: usize,
+		) -> *mut #ident {
 			__MASHIN_LOG_INIT.call_once(|| {
 				let logger = unsafe {
 					Box::from_raw(logger_ptr)
@@ -144,7 +146,8 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 				setup_panic_hook();
 			});
 
-			let args = unsafe { ::std::rc::Rc::from_raw(args_ptr) };
+			let buf = unsafe { ::std::slice::from_raw_parts(args_ptr, args_length) };
+			let args = ::mashin_sdk::ext::serde_json::from_slice(buf).expect("valid buffer");
 
 			let runtime = ::mashin_sdk::ext::tokio::runtime::Runtime::new().expect("New runtime");
 			let mut provider = #ident::default();
@@ -159,18 +162,18 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 		#[no_mangle]
 		pub extern "C" fn run(
 			handle_ptr: *mut #ident,
-			args_ptr: *mut ::mashin_sdk::ResourceArgs,
-		) -> *mut ::mashin_sdk::ResourceResult {
-
+			args_ptr: *const u8,
+			args_length: usize,
+		) -> *const u8 {
 			let runtime = ::mashin_sdk::ext::tokio::runtime::Runtime::new().expect("New runtime");
+
+			let buf = unsafe { ::std::slice::from_raw_parts(args_ptr, args_length) };
+			let args: ::mashin_sdk::ResourceArgs = ::mashin_sdk::ext::serde_json::from_slice(buf).expect("valid buffer");
 
 			// grab current provider
 			assert!(!handle_ptr.is_null());
 			let provider = unsafe { &mut *handle_ptr };
 			let provider_state = provider.state_as_ref();
-
-			// resource URN
-			let args = unsafe { ::std::rc::Rc::from_raw(args_ptr) };
 
 			let urn = &args.urn;
 			let raw_config = &args.raw_config.clone();
@@ -199,8 +202,14 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 
 			let state = resource.to_raw_state().expect("valid resource");
 			let result = ::mashin_sdk::ResourceResult::new(state);
-
-			::std::rc::Rc::into_raw(::std::rc::Rc::new(result)) as *mut ::mashin_sdk::ResourceResult
+			let json = ::mashin_sdk::ext::serde_json::to_string(&result).expect("valid `ResourceResult`");
+			let encoded = json.into_bytes();
+			let length = (encoded.len() as u32).to_be_bytes();
+			let mut v = length.to_vec();
+			v.extend(encoded.clone());
+			let ret = v.as_ptr();
+			::std::mem::forget(v);
+			ret
 		}
 
 		#[no_mangle]
