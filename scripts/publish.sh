@@ -5,7 +5,7 @@
 
 set -eu
 
-ORDER=(macro sdk/rust core runtime cli)
+ORDER=(macro sdk core runtime cli)
 
 function read_toml () {
 	NAME=""
