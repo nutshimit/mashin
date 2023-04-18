@@ -1,6 +1,6 @@
 [package]
 name = "mashin_sdk"
-version = "0.1.0"
+version = "0.1.2"
 readme = "README.md"
 description = "SDK for writing mashin resources"
 authors.workspace = true
@@ -17,5 +17,4 @@ mashin_macro.workspace = true
 tokio.workspace = true
 log.workspace = true
 env_logger.workspace = true
-
-urn = "0.5.1"
+urn.workspace = true

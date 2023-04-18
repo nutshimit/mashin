@@ -107,7 +107,8 @@ impl ExecutedResources {
 
 		for (urn, executed_resource) in self.iter() {
 			if let Err(err) = executed_resource.print_diff(urn) {
-				log::error!("{err}")
+				// mainly failing because there is no diff to apply
+				log::trace!("{err}")
 			}
 		}
 

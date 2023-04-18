@@ -1,6 +1,6 @@
 [package]
 name = "mashin_core"
-version = "0.1.0"
+version = "0.1.2"
 readme = "README.md"
 description = "The core of mashin, consumed by the runtime engine"
 authors.workspace = true

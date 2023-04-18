@@ -19,7 +19,7 @@ use std::{
 	collections::BTreeMap,
 };
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ProviderState
 where
 	Self: Send + Sync,

@@ -51,7 +51,7 @@ pub mod ext {
 
 pub type ResourceId = u32;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ResourceArgs {
 	pub action: Rc<ResourceAction>,
 	pub urn: Rc<Urn>,
@@ -59,7 +59,7 @@ pub struct ResourceArgs {
 	pub raw_state: Rc<RefCell<Value>>,
 }
 
-#[derive(Default, Clone, Debug, PartialEq)]
+#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ResourceAction {
 	Update {
 		diff: Rc<ResourceDiff>,
@@ -100,7 +100,7 @@ impl ResourceAction {
 	}
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ResourceDiff(Vec<String>);
 
 impl ResourceDiff {
@@ -113,7 +113,7 @@ impl ResourceDiff {
 	}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceResult(serde_json::Value);
 
 impl ResourceResult {
