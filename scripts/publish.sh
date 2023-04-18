@@ -89,9 +89,3 @@ for CRATE_DIR in ${ORDER[@]}; do
 	done
 	cd - > /dev/null
 done
-
-echo "Tagging mashin@$VERSION"
-set -x
-git tag -a v$VERSION -m "Version $VERSION"
-sleep 3
-git push --tags
