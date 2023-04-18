@@ -1,6 +1,6 @@
 [package]
 name = "mashin_macro"
-version = "0.1.3"
+version = "0.1.4"
 readme = "README.md"
 description = "Proc macro for writing mashin resources"
 authors.workspace = true
