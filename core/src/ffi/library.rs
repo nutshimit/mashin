@@ -50,13 +50,14 @@ impl DynamicLibraryResource {
 		};
 
 		let provider_pointer = unsafe {
-			let call_args = vec![
-				NativeValue { pointer: logger_ptr }.as_arg(&NativeType::Pointer),
-				NativeValue { pointer: props_ptr as *mut c_void }.as_arg(&NativeType::Pointer),
-				NativeValue { usize_value: props_length }.as_arg(&NativeType::USize),
-			];
-
-			symbol.cif.call::<*mut c_void>(symbol.ptr, &call_args)
+			symbol.cif.call::<*mut c_void>(
+				symbol.ptr,
+				&[
+					NativeValue { pointer: logger_ptr }.as_arg(&NativeType::Pointer),
+					NativeValue { pointer: props_ptr as *mut c_void }.as_arg(&NativeType::Pointer),
+					NativeValue { usize_value: props_length }.as_arg(&NativeType::USize),
+				],
+			)
 		};
 
 		unsafe {
@@ -70,9 +71,10 @@ impl DynamicLibraryResource {
 		let symbol = self.symbols.get("drop").ok_or(anyhow!("valid `drop` symbol"))?;
 
 		unsafe {
-			let call_args =
-				vec![NativeValue { pointer: provider_ptr }.as_arg(&NativeType::Pointer)];
-			symbol.cif.call::<()>(symbol.ptr, &call_args);
+			symbol.cif.call::<()>(
+				symbol.ptr,
+				&[NativeValue { pointer: provider_ptr }.as_arg(&NativeType::Pointer)],
+			);
 		};
 
 		Ok(())
@@ -95,12 +97,14 @@ impl DynamicLibraryResource {
 		};
 
 		let res_ptr = unsafe {
-			let call_args = vec![
-				NativeValue { pointer: provider_ptr }.as_arg(&NativeType::Pointer),
-				NativeValue { pointer: args_ptr as *mut c_void }.as_arg(&NativeType::Pointer),
-				NativeValue { usize_value: args_length }.as_arg(&NativeType::USize),
-			];
-			symbol.cif.call::<*const u8>(symbol.ptr, &call_args)
+			symbol.cif.call::<*const u8>(
+				symbol.ptr,
+				&[
+					NativeValue { pointer: provider_ptr }.as_arg(&NativeType::Pointer),
+					NativeValue { pointer: args_ptr as *mut c_void }.as_arg(&NativeType::Pointer),
+					NativeValue { usize_value: args_length }.as_arg(&NativeType::USize),
+				],
+			)
 		};
 
 		// we extract the 4 first bytes (u32) that represent the lenght of our result slice
