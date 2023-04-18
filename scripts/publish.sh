@@ -5,7 +5,7 @@
 
 set -eu
 
-ORDER=(macro sdk/rust core runtime cli)
+ORDER=(macro sdk core runtime cli)
 
 function read_toml () {
 	NAME=""
@@ -89,9 +89,3 @@ for CRATE_DIR in ${ORDER[@]}; do
 	done
 	cd - > /dev/null
 done
-
-echo "Tagging mashin@$VERSION"
-set -x
-git tag -a v$VERSION -m "Version $VERSION"
-sleep 3
-git push --tags

@@ -11,7 +11,7 @@ members = [
     "runtime",
     "macro",
     "cli",
-    "sdk/rust",
+    "sdk",
 ]
 
 [workspace.dependencies]
@@ -43,5 +43,5 @@ urn = {version = "0.5.1", features = ["serde"] }
 # mashin
 mashin_core = { version = "0.1.3", path = "./core" }
 mashin_runtime = { version = "0.1.3", path = "./runtime" }
-mashin_sdk = { version = "0.1.3", path = "./sdk/rust" }
+mashin_sdk = { version = "0.1.3", path = "./sdk" }
 mashin_macro = { version = "0.1.3", path = "./macro" }

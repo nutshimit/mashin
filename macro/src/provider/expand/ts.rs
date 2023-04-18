@@ -193,8 +193,8 @@ T
 *                                                          *
 \* ---------------------------------------------------------*/
 
-import * as resource from "../../sdk/ts/resource.ts";
-import {{ Inputs, Outputs }} from "../../sdk/ts/output.ts";
+import * as resource from "https://mashin.land/sdk/resource.ts";
+import {{ Inputs, Outputs }} from "https://mashin.land/sdk/output.ts";
 
 const url = Deno.env.get("LOCAL_PLUGIN")
   ? "./target/debug/lib{}.dylib"

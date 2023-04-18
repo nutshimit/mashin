@@ -1417,7 +1417,7 @@ dependencies = [
 
 [[package]]
 name = "mashin_macro"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "Inflector",
  "darling 0.14.4",
@@ -1458,7 +1458,7 @@ dependencies = [
 
 [[package]]
 name = "mashin_sdk"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "async-trait",
