@@ -8,10 +8,6 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
-[[bin]]
-name = "mashin"
-doc = false
-
 [dependencies]
 mashin_runtime.workspace = true
 mashin_sdk.workspace = true
