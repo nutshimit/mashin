@@ -9,6 +9,9 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: ${{ matrix.kind }} ${{ matrix.os }}
@@ -47,13 +50,30 @@ jobs:
           command: build
           args: --release
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
+      - name: Sign (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: lando/code-sign-action@v2
         with:
-          name: build
-          path: |
-            target/release/mashin
-            target/release/mashin.exe
+          file: ./target/release/mashin
+          certificate-data: ${{ secrets.APPLE_CERT_DATA }}
+          certificate-password: ${{ secrets.APPLE_CERT_PASSWORD }}
+          apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+          apple-notary-user: ${{ secrets.APPLE_NOTARY_USER }}
+          apple-notary-password: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+          apple-product-id: land.mashin.runtime
+          options: --options runtime
+
+      - name: Zip (windows)
+        if: matrix.os == 'windows-latest'
+        run: cd target/release && Compress-Archive mashin.exe mashin-x86_64-pc-windows-msvc.zip
+
+      - name: Zip (macOS)
+        if: matrix.os == 'macos-latest'
+        run: cd target/release && zip mashin-x86_64-apple-darwin.zip ./mashin
+
+      - name: Zip (linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: cd target/release && zip mashin-x86_64-unknown-linux-gnu.zip ./mashin
 
       - name: Draft release
         uses: softprops/action-gh-release@master
@@ -63,41 +83,6 @@ jobs:
           tag_name: ${{ github.ref_name }}
           draft: true
           files: |
-            target/release/mashin
-            target/release/mashin.exe
-
-      - name: Upload S3
-        if: matrix.platform == 'ubuntu-latest'
-        uses: jakejarvis/s3-sync-action@master
-        with:
-          args: --acl public-read --follow-symlinks --delete
-        env:
-          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET_GET }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
-          SOURCE_DIR: target/release/mashin
-          DEST_DIR: builds/mashin/x86_64-unknown-linux-gnu/${{ github.ref_name }}/mashin
-
-      - name: Upload S3
-        if: matrix.platform == 'macos-latest'
-        uses: jakejarvis/s3-sync-action@master
-        with:
-          args: --acl public-read --follow-symlinks --delete
-        env:
-          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET_GET }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
-          SOURCE_DIR: target/release/mashin
-          DEST_DIR: builds/mashin/x86_64-apple-darwin/${{ github.ref_name }}/mashin
-
-      - name: Upload S3
-        if: matrix.platform == 'windows-latest'
-        uses: jakejarvis/s3-sync-action@master
-        with:
-          args: --acl public-read --follow-symlinks --delete
-        env:
-          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET_GET }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
-          SOURCE_DIR: target/release/mashin.exe
-          DEST_DIR: builds/mashin/x86_64-pc-windows-msvc/${{ github.ref_name }}/mashin.exe
+            target/release/mashin-x86_64-unknown-linux-gnu.zip
+            target/release/mashin-x86_64-apple-darwin.zip
+            target/release/mashin-x86_64-pc-windows-msvc.zip
