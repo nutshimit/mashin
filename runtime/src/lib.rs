@@ -108,6 +108,7 @@ pub struct Runtime {
 	main_module: String,
 	command: RuntimeCommand,
 	raw_args: Vec<String>,
+	#[allow(dead_code)]
 	mashin_dir: MashinDir,
 }
 
