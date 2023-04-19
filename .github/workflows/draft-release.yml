@@ -59,6 +59,18 @@ jobs:
             target/release/mashin
             target/release/mashin.exe
 
+      - name: Zip (windows)
+        if: matrix.platform == 'windows-latest'
+        run: cd target/release && zip mashin-x86_64-pc-windows-msvc.zip ./mashin.exe
+
+      - name: Zip (macOS)
+        if: matrix.platform == 'macos-latest'
+        run: cd target/release && zip mashin-x86_64-apple-darwin.zip ./mashin
+
+      - name: Zip (linux)
+        if: matrix.platform == 'ubuntu-latest'
+        run: cd target/release && zip mashin-x86_64-unknown-linux-gnu.zip ./mashin
+
       - name: Draft release
         uses: softprops/action-gh-release@master
         env:
@@ -67,5 +79,6 @@ jobs:
           tag_name: ${{ github.ref_name }}
           draft: true
           files: |
-            target/release/mashin
-            target/release/mashin.exe
+            target/release/mashin-x86_64-unknown-linux-gnu.zip
+            target/release/mashin-x86_64-apple-darwin.zip
+            target/release/mashin-x86_64-pc-windows-msvc.zip
