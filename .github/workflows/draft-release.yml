@@ -31,6 +31,9 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
+          key: draft-release-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            draft-release-${{ runner.os }}-cargo-
 
       - name: install rust
         uses: actions-rs/toolchain@v1
