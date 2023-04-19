@@ -5,7 +5,8 @@ on:
     tags:
       # Catches v1.2.3 and v1.2.3-rc1
       - v[0-9]+.[0-9]+.[0-9]+*
-
+    branches:
+      - lemarier-release-flow
 env:
   CARGO_TERM_COLOR: always
 
@@ -49,6 +50,19 @@ jobs:
         with:
           command: build
           args: --release
+
+      - name: Sign (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: lando/code-sign-action@v2
+        with:
+          file: target/release/mashin
+          certificate-data: ${{ secrets.APPLE_CERT_DATA }}
+          certificate-password: ${{ secrets.APPLE_CERT_PASSWORD }}
+          apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+          apple-notary-user: ${{ secrets.APPLE_NOTARY_USER }}
+          apple-notary-password: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+          apple-product-id: land.mashin.runtime
+          options: --options runtime
 
       - name: Zip (windows)
         if: matrix.os == 'windows-latest'
