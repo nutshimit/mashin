@@ -57,3 +57,4 @@ jobs:
         with:
           toolchain: nightly
           args: --all-targets -- -D warnings
+          token: ${{ secrets.GITHUB_TOKEN }}
