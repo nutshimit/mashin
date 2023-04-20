@@ -14,10 +14,18 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use crate::Result;
+use std::{rc::Rc, sync::Arc};
+
+use crate::{
+	cache::HttpCache,
+	http_client::HttpClient,
+	module_loader::TypescriptModuleLoader,
+	util::progress_bar::{ProgressBar, ProgressBarStyle, ProgressMessagePrompt},
+	Result,
+};
 use clap::Parser;
 use dialoguer::Confirm;
-use mashin_runtime::Runtime;
+use mashin_runtime::{MashinDir, Runtime};
 
 #[derive(Debug, Parser)]
 pub struct Cli {
@@ -48,12 +56,27 @@ pub struct DestroyCmd {
 
 impl RunCmd {
 	pub async fn run(&self, args: Vec<String>) -> Result<()> {
+		let mashin_dir = MashinDir::new(None)?;
+		let progress_bar = ProgressBar::new(ProgressBarStyle::DownloadBars);
+		let http_client = HttpClient::new(
+			HttpCache::new(&mashin_dir.deps_folder_path()),
+			None,
+			true,
+			log::Level::Info,
+			Some(progress_bar.clone()),
+		)?;
+		let http_client_rc = Rc::new(http_client.clone());
+		let module_loader = Rc::new(TypescriptModuleLoader { http_client: Arc::new(http_client) });
+
 		let create_runtime = |executed_resource| {
 			Runtime::new(
 				&self.main_module,
 				mashin_runtime::RuntimeCommand::Run,
 				args.clone(),
 				executed_resource,
+				http_client_rc.clone(),
+				module_loader.clone(),
+				&mashin_dir,
 			)
 		};
 
@@ -75,9 +98,29 @@ impl RunCmd {
 
 impl DestroyCmd {
 	pub async fn run(&self, args: Vec<String>) -> Result<()> {
-		Runtime::new(&self.main_module, mashin_runtime::RuntimeCommand::Destroy, args, None)?
-			.run()
-			.await?;
+		let mashin_dir = MashinDir::new(None)?;
+		let progress_bar = ProgressBar::new(ProgressBarStyle::DownloadBars);
+		let http_client = HttpClient::new(
+			HttpCache::new(&mashin_dir.deps_folder_path()),
+			None,
+			true,
+			log::Level::Info,
+			Some(progress_bar),
+		)?;
+		let http_client_rc = Rc::new(http_client.clone());
+		let module_loader = Rc::new(TypescriptModuleLoader { http_client: Arc::new(http_client) });
+
+		Runtime::new(
+			&self.main_module,
+			mashin_runtime::RuntimeCommand::Destroy,
+			args,
+			None,
+			http_client_rc,
+			module_loader,
+			&mashin_dir,
+		)?
+		.run()
+		.await?;
 		Ok(())
 	}
 }

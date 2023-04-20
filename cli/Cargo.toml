@@ -9,12 +9,28 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-mashin_runtime.workspace = true
-mashin_sdk.workspace = true
 tokio.workspace = true
 anyhow.workspace = true
 log.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+once_cell.workspace = true
+atty.workspace = true
+
+mashin_runtime.workspace = true
+mashin_sdk.workspace = true
+
+deno_ast = { workspace = true, features = ["transpiling"] }
+deno_fetch.workspace = true
+deno_core.workspace = true
 
 clap = { version = "4.2.1", features = ["derive"] }
 env_logger.workspace = true
 dialoguer = "0.10.4"
+encoding_rs = "=0.8.31"
+ring = "=0.16.20"
+rand = "0.8.5"
+console_static_text = "=0.8.1"
+libc = "0.2.126"
+[target.'cfg(windows)'.dependencies]
+winapi = { workspace = true, features = ["errhandlingapi", "minwindef", "ntdef", "winbase", "winnt"] }

@@ -24,7 +24,6 @@ pub use crate::{
 };
 pub use mashin_sdk as sdk;
 pub(crate) use sdk::Result;
-use std::ffi::c_void;
 
 mod backend;
 mod client;
@@ -41,13 +40,6 @@ macro_rules! log {
             $patter $(, $values)*
 		)
 	};
-}
-
-#[derive(Clone)]
-pub struct ProviderInner {
-	pub name: String,
-	pub provider: *mut c_void,
-	pub drop_fn: Symbol,
 }
 
 #[derive(Clone)]

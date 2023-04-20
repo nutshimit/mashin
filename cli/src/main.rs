@@ -20,8 +20,12 @@ use cli::{Cli, Subcommand};
 use mashin_runtime::colors;
 use std::env;
 
+mod cache;
 mod cli;
+mod http_client;
 mod logger;
+mod module_loader;
+mod util;
 
 const MASHIN: &str = r#"
                                      ███╗░░░███╗░█████╗░░██████╗██╗░░██╗██╗███╗░░██╗

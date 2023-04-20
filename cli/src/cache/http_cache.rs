@@ -21,6 +21,7 @@ use deno_core::{
 	error::{custom_error, generic_error},
 	serde_json,
 };
+use mashin_sdk::HeadersMap;
 use reqwest::Url;
 use ring::digest::{Context, SHA256};
 use serde::{Deserialize, Serialize};
@@ -33,8 +34,6 @@ use std::{
 	path::{Path, PathBuf},
 	time::SystemTime,
 };
-
-pub type HeadersMap = HashMap<String, String>;
 
 /// Turn base of url (scheme, hostname, port) into a valid filename.
 /// This method replaces port part with a special string token (because
@@ -103,6 +102,53 @@ pub struct HttpCache {
 	pub location: PathBuf,
 }
 
+impl mashin_sdk::HttpCache for HttpCache {
+	fn fetch_cached_path(
+		&self,
+		specifier: &reqwest::Url,
+		redirect_limit: i64,
+	) -> Result<Option<PathBuf>> {
+		if redirect_limit < 0 {
+			return Err(custom_error("Http", "Too many redirects."))
+		}
+
+		if let Some(cache_filename) = self.get_cache_filename(specifier) {
+			if cache_filename.exists() {
+				let metadata = CachedUrlMetadata::read(&cache_filename)?;
+				if let Some(redirect_to) = metadata.headers.get("location") {
+					let redirect = deno_core::resolve_import(redirect_to, specifier.as_str())?;
+					return self.fetch_cached_path(&redirect, redirect_limit - 1)
+				}
+
+				return Ok(Some(cache_filename))
+			}
+		}
+
+		Ok(None)
+	}
+
+	fn set(&self, url: &reqwest::Url, headers_map: HeadersMap, content: &[u8]) -> Result<PathBuf> {
+		let cache_filename = self.location.join(
+			url_to_filename(url).ok_or_else(|| generic_error("Can't convert url to filename."))?,
+		);
+		// Create parent directory
+		let parent_filename =
+			cache_filename.parent().expect("Cache filename should have a parent dir");
+		self.ensure_dir_exists(parent_filename)?;
+		// Cache content
+		atomic_write_file(&cache_filename, content, CACHE_PERM)?;
+
+		let metadata = CachedUrlMetadata {
+			now: SystemTime::now(),
+			url: url.to_string(),
+			headers: headers_map,
+		};
+		metadata.write(&cache_filename)?;
+
+		Ok(cache_filename)
+	}
+}
+
 impl HttpCache {
 	/// Returns a new instance.
 	///
@@ -142,27 +188,6 @@ impl HttpCache {
 		Ok((file, metadata.headers, metadata.now))
 	}
 
-	pub fn set(&self, url: &Url, headers_map: HeadersMap, content: &[u8]) -> Result<PathBuf> {
-		let cache_filename = self.location.join(
-			url_to_filename(url).ok_or_else(|| generic_error("Can't convert url to filename."))?,
-		);
-		// Create parent directory
-		let parent_filename =
-			cache_filename.parent().expect("Cache filename should have a parent dir");
-		self.ensure_dir_exists(parent_filename)?;
-		// Cache content
-		atomic_write_file(&cache_filename, content, CACHE_PERM)?;
-
-		let metadata = CachedUrlMetadata {
-			now: SystemTime::now(),
-			url: url.to_string(),
-			headers: headers_map,
-		};
-		metadata.write(&cache_filename)?;
-
-		Ok(cache_filename)
-	}
-
 	pub fn fetch_cached(
 		&self,
 		specifier: &ModuleSpecifier,
@@ -192,30 +217,6 @@ impl HttpCache {
 		let file = self.build_remote_file(specifier, bytes, &headers)?;
 
 		Ok(Some(file))
-	}
-
-	pub fn fetch_cached_path(
-		&self,
-		specifier: &ModuleSpecifier,
-		redirect_limit: i64,
-	) -> Result<Option<PathBuf>> {
-		if redirect_limit < 0 {
-			return Err(custom_error("Http", "Too many redirects."))
-		}
-
-		if let Some(cache_filename) = self.get_cache_filename(specifier) {
-			if cache_filename.exists() {
-				let metadata = CachedUrlMetadata::read(&cache_filename)?;
-				if let Some(redirect_to) = metadata.headers.get("location") {
-					let redirect = deno_core::resolve_import(redirect_to, specifier.as_str())?;
-					return self.fetch_cached_path(&redirect, redirect_limit - 1)
-				}
-
-				return Ok(Some(cache_filename))
-			}
-		}
-
-		Ok(None)
 	}
 
 	pub fn build_remote_file(

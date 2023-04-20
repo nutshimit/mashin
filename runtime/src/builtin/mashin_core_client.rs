@@ -14,7 +14,7 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use crate::{http_client::HttpClient, js_log, log};
+use crate::{js_log, log};
 use deno_core::{
 	error::{generic_error, type_error},
 	serde_json::{self, Value},
@@ -23,7 +23,7 @@ use deno_core::{
 use dlopen::raw::Library;
 use mashin_core::{
 	colors,
-	sdk::{ext::anyhow::anyhow, ResourceAction, ResourceArgs, Result, Urn},
+	sdk::{ext::anyhow::anyhow, HttpClient, ResourceAction, ResourceArgs, Result, Urn},
 	DynamicLibraryResource, ExecutedResource, ForeignFunction, MashinEngine, RegisteredProvider,
 	Symbol,
 };
@@ -188,16 +188,14 @@ pub async fn as__runtime__register_provider__download(
 	let cached_local_path = {
 		match provider {
 			ProviderDownloadSource::GithubRelease => {
-				let http_client = {
-					let op_state = op_state_rc.borrow();
-					op_state.borrow::<HttpClient>().clone()
-				};
+				let op_state = op_state_rc.borrow();
+				let http_client = op_state.borrow::<Rc<dyn HttpClient>>();
 
 				match http_client.cache().fetch_cached_path(&module_specifier, 10) {
 					Ok(Some(cache_filename)) => cache_filename.into_os_string().into_string(),
 					Ok(None) => {
 						let (remote_data, headers) =
-							http_client.download_with_headers(module_specifier.clone()).await?;
+							http_client.download_with_progress(&module_specifier).await?;
 						let file =
 							http_client.cache().set(&module_specifier, headers, &remote_data)?;
 						file.into_os_string().into_string()

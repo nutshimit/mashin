@@ -15,13 +15,14 @@ serde_json.workspace = true
 serde.workspace = true
 async-trait.workspace = true
 mashin_sdk.workspace = true
-deno_core.workspace = true
 libffi.workspace = true
 dlopen.workspace = true
 log.workspace = true
 termcolor.workspace = true
 atty.workspace = true
 once_cell.workspace = true
+
+deno_core.workspace = true
 
 url = "2.3"
 syn = "1.0.109"
