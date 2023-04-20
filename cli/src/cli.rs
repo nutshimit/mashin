@@ -67,7 +67,6 @@ impl RunCmd {
 		)?;
 		let http_client_rc = Rc::new(http_client.clone());
 		let module_loader = Rc::new(TypescriptModuleLoader { http_client: Arc::new(http_client) });
-
 		let create_runtime = |executed_resource| {
 			Runtime::new(
 				&self.main_module,

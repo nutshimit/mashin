@@ -35,10 +35,9 @@ use std::collections::HashMap;
 pub struct HttpClient {
 	client: reqwest::Client,
 	pub http_cache: HttpCache,
-
-	allow_remote: bool,
-	download_log_level: log::Level,
-	progress_bar: Option<ProgressBar>,
+	pub progress_bar: Option<ProgressBar>,
+	pub allow_remote: bool,
+	pub download_log_level: log::Level,
 }
 
 #[async_trait]
@@ -213,13 +212,17 @@ pub enum FetchOnceResult {
 }
 
 #[derive(Debug)]
-pub struct FetchOnceArgs {
+pub struct FetchOnceArgs<'a> {
 	pub url: reqwest::Url,
 	pub maybe_accept: Option<String>,
 	pub maybe_etag: Option<String>,
+	pub maybe_progress_guard: Option<&'a UpdateGuard>,
 }
 
-pub async fn fetch_once(http_client: &HttpClient, args: FetchOnceArgs) -> Result<FetchOnceResult> {
+pub async fn fetch_once<'a>(
+	http_client: &HttpClient,
+	args: FetchOnceArgs<'a>,
+) -> Result<FetchOnceResult> {
 	let mut request = http_client.get_no_redirect(&args.url);
 
 	if let Some(etag) = args.maybe_etag {
@@ -265,7 +268,8 @@ pub async fn fetch_once(http_client: &HttpClient, args: FetchOnceArgs) -> Result
 		return Err(err)
 	}
 
-	let body = response.bytes().await?;
+	let body = get_response_body_with_progress(response, args.maybe_progress_guard).await?;
+
 	Ok(FetchOnceResult::Code(body.to_vec(), result_headers))
 }
 

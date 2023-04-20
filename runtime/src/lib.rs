@@ -36,6 +36,7 @@ use std::{
 	ops::{Deref, DerefMut},
 	path::Path,
 	rc::Rc,
+	str::FromStr,
 	sync::Arc,
 };
 
@@ -242,7 +243,13 @@ impl Runtime {
 
 	// run the main module, evaluating each resource
 	async fn run_main_module(&mut self) -> Result<()> {
-		let main_module = resolve_path(&self.main_module, current_dir()?.as_path())?;
+		let main_module_path = &self.main_module;
+		let main_module = if main_module_path.starts_with("https") {
+			ModuleSpecifier::from_str(main_module_path)?
+		} else {
+			resolve_path(&self.main_module, current_dir()?.as_path())?
+		};
+
 		let mod_id = self.runtime.load_main_module(&main_module, None).await?;
 		let result_main = self.runtime.mod_evaluate(mod_id);
 		self.runtime.run_event_loop(false).await?;

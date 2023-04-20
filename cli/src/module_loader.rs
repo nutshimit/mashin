@@ -11,6 +11,7 @@ use deno_core::{
 	resolve_import, Extension, JsRuntime, ModuleLoader, ModuleSource, ModuleSourceFuture,
 	ModuleSpecifier, ModuleType, OpDecl, ResolutionKind, RuntimeOptions,
 };
+use mashin_runtime::colors;
 use mashin_sdk::{HttpCache as _, HttpClient as _};
 use std::{fs, future::Future, pin::Pin, sync::Arc};
 
@@ -32,12 +33,23 @@ impl TypescriptModuleLoader {
 		}
 		let http_client = self.http_client.clone();
 		let http_cache = http_client.http_cache.clone();
-		let file_fetcher = self.clone();
+		let module_loader = self.clone();
 		let path = path.clone();
+		let mut maybe_progress_guard = None;
+		if let Some(pb) = http_client.progress_bar.as_ref() {
+			maybe_progress_guard = Some(pb.update(path.as_str()));
+		} else {
+			log::log!(http_client.download_log_level, "{} {}", colors::green("Download"), path);
+		}
 		async move {
 			match fetch_once(
 				&http_client.clone(),
-				FetchOnceArgs { url: path.clone(), maybe_accept: None, maybe_etag: None },
+				FetchOnceArgs {
+					url: path.clone(),
+					maybe_accept: None,
+					maybe_etag: None,
+					maybe_progress_guard: maybe_progress_guard.as_ref(),
+				},
 			)
 			.await?
 			{
@@ -47,7 +59,7 @@ impl TypescriptModuleLoader {
 				},
 				FetchOnceResult::Redirect(redirect_url, headers) => {
 					http_cache.set(&path, headers, &[])?;
-					file_fetcher.load_from_remote_url(&redirect_url, redirect_limit - 1).await
+					module_loader.load_from_remote_url(&redirect_url, redirect_limit - 1).await
 				},
 				FetchOnceResult::Code(bytes, headers) => {
 					http_cache.set(&path, headers.clone(), &bytes)?;
