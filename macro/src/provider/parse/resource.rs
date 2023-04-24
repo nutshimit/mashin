@@ -16,13 +16,16 @@
 
 use syn::spanned::Spanned;
 
-#[derive(Clone, Debug)]
+use super::get_doc_literals;
+
+#[derive(Clone)]
 pub struct ResourceDef {
 	pub name: String,
 	pub config: syn::Ident,
 	pub index: usize,
 	pub attr_span: proc_macro2::Span,
 	pub ident: syn::Ident,
+	pub docs: Vec<syn::Expr>,
 }
 
 mod keyword {
@@ -50,8 +53,9 @@ impl ResourceDef {
 			let msg = "Invalid provider::resource, struct must be public";
 			return Err(syn::Error::new(item.span(), msg))
 		}
+		let docs = get_doc_literals(&item.attrs);
 
-		Ok(Self { name, config, attr_span, index, ident })
+		Ok(Self { name, config, attr_span, index, ident, docs })
 	}
 }
 

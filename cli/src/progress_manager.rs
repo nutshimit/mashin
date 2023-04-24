@@ -14,43 +14,52 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use quote::ToTokens;
-use syn::spanned::Spanned;
+use crate::Result;
+use console::Term;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
-use super::get_doc_literals;
-
-pub struct ProviderDef {
-	pub index: usize,
-	pub attr_span: proc_macro2::Span,
-	pub docs: Vec<syn::Expr>,
+#[derive(Clone, Debug, Default)]
+pub struct ProgressManager {
+	pub http_progress: MultiProgress,
+	pub resource_progress: Option<ProgressBar>,
 }
 
-mod keyword {
-	syn::custom_keyword!(Provider);
-}
+impl ProgressManager {
+	pub fn new() -> Self {
+		Default::default()
+	}
 
-impl ProviderDef {
-	pub fn try_from(
-		attr_span: proc_macro2::Span,
-		index: usize,
-		item: &mut syn::Item,
-	) -> syn::Result<Self> {
-		let item = if let syn::Item::Struct(item) = item {
-			item
-		} else {
-			let msg = "Invalid provider::provider, expected struct";
-			return Err(syn::Error::new(item.span(), msg))
-		};
-
-		if !matches!(item.vis, syn::Visibility::Public(_)) {
-			let msg = "Invalid provider::provider, struct must be public";
-			return Err(syn::Error::new(item.span(), msg))
+	pub fn maybe_finish_resource_progress(&self) {
+		if let Some(resource_progress) = &self.resource_progress {
+			resource_progress.finish_and_clear();
 		}
+	}
 
-		let docs = get_doc_literals(&item.attrs);
+	pub fn set_resource_progress(&mut self, len: u64) -> Result<()> {
+		let pb = ProgressBar::new(len);
+		pb.set_style(
+			ProgressStyle::with_template(
+				// note that bar size is fixed unlike cargo which is dynamic
+				// and also the truncation in cargo uses trailers (`...`)
+				if Term::stdout().size().1 > 80 {
+					"{spinner:.green} [{elapsed_precise}] [{bar:57}] {pos}/{len} {wide_msg}"
+				} else {
+					"{spinner:.green} [{elapsed_precise}] [{bar:57}] {pos}/{len}"
+				},
+			)?
+			.progress_chars("#>-"),
+		);
+		self.resource_progress = Some(pb);
+		Ok(())
+	}
+}
 
-		syn::parse2::<keyword::Provider>(item.ident.to_token_stream())?;
+impl mashin_runtime::ProgressManager for ProgressManager {
+	fn println(&self, msg: &str) {
+		println!("{msg}");
+	}
 
-		Ok(Self { index, attr_span, docs })
+	fn progress_bar(&self) -> Option<indicatif::ProgressBar> {
+		self.resource_progress.clone()
 	}
 }

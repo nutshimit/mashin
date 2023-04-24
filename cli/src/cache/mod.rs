@@ -20,11 +20,6 @@ use deno_ast::MediaType;
 use deno_core::ModuleSpecifier;
 use encoding_rs::Encoding;
 pub use http_cache::HttpCache;
-pub use mashin_core::{
-	colors,
-	sdk::{ResourceAction, Urn},
-	ExecutedResource,
-};
 use std::{
 	borrow::Cow,
 	collections::HashMap,

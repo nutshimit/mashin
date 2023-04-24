@@ -17,23 +17,7 @@
 use crate::provider::parse::{Def, InternalMashinType, TsType};
 use inflector::Inflector;
 use std::collections::HashMap;
-use syn::{ext::IdentExt, Attribute, Fields, Lit, Meta, NestedMeta};
-
-macro_rules! variant_instance {
-	( $variant:path, $iterator:expr ) => {
-		$iterator
-			.filter_map(
-				|val| {
-					if let $variant(ref f1, ref f2) = *val {
-						Some((f1, f2))
-					} else {
-						None
-					}
-				},
-			)
-			.next()
-	};
-}
+use syn::{ext::IdentExt, Attribute, Fields, Meta};
 
 pub fn process_struct(
 	def: &mut Def,
@@ -52,7 +36,7 @@ pub fn process_struct(
 			let mut fmap = HashMap::new();
 			let mut typescript: Vec<String> = vec![];
 
-			let serde_attrs = get_serde_attrs(attrs);
+			//let serde_attrs = get_serde_attrs(attrs);
 
 			for field in fields.iter() {
 				let mut ident = field
@@ -87,11 +71,13 @@ pub fn process_struct(
 				// force camelcase on all fields
 				ident = ident.to_camel_case();
 
+				/*
 				for attr in &serde_attrs {
 					if let Some(i) = attr.transform(&ident) {
 						ident = i;
 					}
 				}
+				*/
 
 				let doc_str = get_docs(&field.attrs);
 				typescript.push(format!("{}  {}: {};", doc_str, ident, types_to_ts(&field.ty)));
@@ -120,9 +106,9 @@ pub fn process_struct(
 				let mut variant_fields: Vec<String> = vec![];
 				let fields = &variant.fields;
 
-				let serde_attrs = get_serde_attrs(attrs);
+				//let serde_attrs = get_serde_attrs(attrs);
 				for field in fields {
-					let mut ident = field
+					let ident = field
 						.ident
 						.as_ref()
 						.expect("Field without ident")
@@ -130,11 +116,13 @@ pub fn process_struct(
 						.unraw()
 						.to_string();
 
+					/*
 					for attr in &serde_attrs {
 						if let Some(i) = attr.transform(&ident) {
 							ident = i;
 						}
 					}
+					*/
 
 					let doc_str = get_docs(&field.attrs);
 					variant_fields.push(format!(
@@ -145,56 +133,29 @@ pub fn process_struct(
 					));
 				}
 
-				let mut ident = variant.ident.to_string();
+				let ident = variant.ident.to_string();
 
 				// Perform #[serde] attribute transformers.
 				// This excludes `tag` and `content` attributes.
 				// They require special treatment during codegen.
+				/*
 				for attr in &serde_attrs {
 					if let Some(i) = attr.transform(&ident) {
 						ident = i;
 					}
 				}
+				*/
 
 				let doc_str = get_docs(&variant.attrs);
 
 				let variant_str = if !variant_fields.is_empty() {
-					let tag_content =
-						variant_instance!(SerdeAttr::TagAndContent, serde_attrs.iter());
-
-					match tag_content {
-						None => {
-							format!(
-								"{} {{ {}: {{\n {}\n}} }}",
-								doc_str,
-								&ident,
-								variant_fields.join("\n")
-							)
-						},
-						Some((tag, content)) => {
-							// // $jsdoc
-							// {
-							//   $tag: $ident,
-							//   $content: { ...$fields }
-							// }
-							format!(
-								"{} {{ {}: \"{}\", {}: {{ {} }} }}",
-								doc_str,
-								&tag,
-								&ident,
-								&content,
-								variant_fields.join("\n")
-							)
-						},
-					}
+					format!("{} {{ {}: {{\n {}\n}} }}", doc_str, &ident, variant_fields.join("\n"))
 				} else {
 					format!("{}  \"{}\"", doc_str, &ident)
 				};
 
 				typescript.push(variant_str);
 			}
-
-			// TODO: `type_defs` in favor of `ts_types`
 
 			let doc_str = get_docs(attrs);
 
@@ -257,112 +218,17 @@ fn types_to_ts(ty: &syn::Type) -> String {
 	}
 }
 
-#[derive(Debug)]
-pub enum SerdeAttr {
-	RenameAll(String),
-	TagAndContent(String, String),
-}
-
-impl SerdeAttr {
-	pub fn transform(&self, s: &str) -> Option<String> {
-		match self {
-			SerdeAttr::RenameAll(t) => match t.as_ref() {
-				"lowercase" => Some(s.to_lowercase()),
-				"UPPERCASE" => Some(s.to_uppercase()),
-				"camelCase" => Some(s.to_camel_case()),
-				"snake_case" => Some(s.to_snake_case()),
-				"PascalCase" => Some(s.to_pascal_case()),
-				"SCREAMING_SNAKE_CASE" => Some(s.to_screaming_snake_case()),
-				_ => panic!("Invalid attribute value: {}", s),
-			},
-			_ => None,
-		}
-	}
-}
-
-pub fn get_serde_attrs(attrs: &[Attribute]) -> Vec<SerdeAttr> {
-	attrs
-		.iter()
-		.filter(|i| i.path.is_ident("serde"))
-		.flat_map(|attr| match attr.parse_meta() {
-			Ok(Meta::List(l)) => l.nested.iter().find_map(|meta| match meta {
-				NestedMeta::Meta(Meta::NameValue(v)) => match v.path.get_ident() {
-					Some(id) => match id.to_string().as_ref() {
-						// #[serde(rename_all = "UPPERCASE")]
-						"rename_all" => match &v.lit {
-							Lit::Str(s) => Some(SerdeAttr::RenameAll(s.value())),
-							_ => None,
-						},
-						// #[serde(tag = "key", content = "value")]
-						"tag" => match &v.lit {
-							Lit::Str(s) => {
-								let tag = s.value();
-
-								let lit = l.nested.iter().find_map(|meta| match meta {
-									NestedMeta::Meta(Meta::NameValue(v)) => {
-										match v.path.is_ident("content") {
-											true => Some(&v.lit),
-											false => None,
-										}
-									},
-									_ => None,
-								});
-
-								match lit {
-									Some(Lit::Str(s)) => {
-										let content = s.value();
-										Some(SerdeAttr::TagAndContent(tag, content))
-									},
-									_ => panic!("Missing `content` attribute with `tag`."),
-								}
-							},
-							_ => None,
-						},
-						// #[serde(content = "value", tag = "key")]
-						"content" => match &v.lit {
-							Lit::Str(s) => {
-								let content = s.value();
-
-								let lit = l.nested.iter().find_map(|meta| match meta {
-									NestedMeta::Meta(Meta::NameValue(v)) => {
-										match v.path.is_ident("tag") {
-											true => Some(&v.lit),
-											false => None,
-										}
-									},
-									_ => None,
-								});
-
-								match lit {
-									Some(Lit::Str(s)) => {
-										let tag = s.value();
-										Some(SerdeAttr::TagAndContent(tag, content))
-									},
-									_ => panic!("Missing `tag` attribute with `content`."),
-								}
-							},
-							_ => None,
-						},
-						_ => None,
-					},
-					_ => None,
-				},
-				_ => None,
-			}),
-			_ => None,
-		})
-		.collect::<Vec<_>>()
-}
-
 pub fn get_docs(attrs: &Vec<Attribute>) -> String {
 	let mut doc: Vec<String> = vec![];
 	for attr in attrs {
-		if let Ok(Meta::NameValue(meta)) = attr.parse_meta() {
+		if let Meta::NameValue(meta) = &attr.meta {
 			if !meta.path.is_ident("doc") {
 				continue
 			}
-			if let Lit::Str(lit) = meta.lit {
-				doc.push(lit.value());
+			if let syn::Expr::Lit(lit) = &meta.value {
+				if let syn::Lit::Str(raw_doc) = &lit.lit {
+					doc.push(raw_doc.value());
+				}
 			}
 		}
 	}

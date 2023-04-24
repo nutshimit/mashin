@@ -21,10 +21,11 @@ pub use build::build;
 pub use deserialize::deserialize_state_field;
 pub use logger::CliLogger;
 pub use mashin_macro::provider;
+use parking_lot::Mutex;
 pub use provider_state::ProviderState;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{any::Any, cell::RefCell, rc::Rc};
+use std::{any::Any, cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
 
 mod build;
 mod deserialize;
@@ -44,6 +45,7 @@ pub const KEY_VALUE: &str = "__value";
 pub mod ext {
 	pub use anyhow;
 	pub use async_trait;
+	pub use parking_lot;
 	pub use serde;
 	pub use serde_json;
 	pub use tokio;
@@ -136,11 +138,11 @@ pub trait ResourceSerialize {
 }
 
 pub trait ResourceDefault {
-	fn __default_with_params(name: &str, urn: &str) -> Self
+	fn new(name: &str, urn: &str) -> Self
 	where
 		Self: Sized;
 
-	fn __set_config_from_value(&mut self, config: &Rc<Value>);
+	fn set_raw_config(&mut self, config: &Rc<Value>);
 
 	fn from_current_state(
 		name: &str,
@@ -153,7 +155,7 @@ pub trait ResourceDefault {
 	{
 		let state = raw_state.borrow_mut();
 		if state.as_null().is_some() {
-			Ok(Rc::new(RefCell::new(Self::__default_with_params(name, urn))))
+			Ok(Rc::new(RefCell::new(Self::new(name, urn))))
 		} else {
 			let mut state = state.clone();
 			let merge_fields = json!({
@@ -179,10 +181,14 @@ pub trait ResourceDefault {
 
 #[async_trait]
 pub trait Resource: ResourceEq + ResourceSerialize + ResourceDefault {
-	async fn get(&mut self, provider_state: &ProviderState) -> Result<()>;
-	async fn create(&mut self, provider_state: &ProviderState) -> Result<()>;
-	async fn delete(&mut self, provider_state: &ProviderState) -> Result<()>;
-	async fn update(&mut self, provider_state: &ProviderState, diff: &ResourceDiff) -> Result<()>;
+	async fn get(&mut self, provider_state: Arc<Mutex<ProviderState>>) -> Result<()>;
+	async fn create(&mut self, provider_state: Arc<Mutex<ProviderState>>) -> Result<()>;
+	async fn delete(&mut self, provider_state: Arc<Mutex<ProviderState>>) -> Result<()>;
+	async fn update(
+		&mut self,
+		provider_state: Arc<Mutex<ProviderState>>,
+		diff: &ResourceDiff,
+	) -> Result<()>;
 }
 
 impl<R: 'static + PartialEq> ResourceEq for R {
@@ -203,17 +209,17 @@ impl<R: Serialize> ResourceSerialize for R {
 	}
 }
 
-pub trait Config {}
-
 #[async_trait]
 pub trait ProviderBuilder {
 	async fn build(&mut self) -> Result<()>;
 }
 
 pub trait ProviderDefault {
-	fn state(&mut self) -> &mut Box<ProviderState>;
-	fn state_as_ref(&self) -> &ProviderState;
-	fn __from_current_state(
+	/// Provider gotham state
+	fn state(&mut self) -> Arc<Mutex<ProviderState>>;
+	/// Build a dynamic resource from the urn and the raw state
+	/// Match the urn and apply the current JSON value from the state
+	fn build_resource(
 		&self,
 		urn: &Rc<Urn>,
 		state: &Rc<RefCell<Value>>,
@@ -221,7 +227,7 @@ pub trait ProviderDefault {
 }
 
 #[async_trait]
-pub trait Provider: ProviderBuilder + ProviderDefault + Send + Sync {}
+pub trait Provider: ProviderBuilder + ProviderDefault {}
 
 pub fn merge_json(a: &mut serde_json::Value, b: &serde_json::Value) {
 	match (a, b) {

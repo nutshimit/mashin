@@ -111,7 +111,7 @@ version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70151a5226578411132d798aa248df45b30aa34aea2e580628870b4d87be717b"
 dependencies = [
- "darling 0.13.4",
+ "darling",
  "pmutil",
  "proc-macro2 1.0.56",
  "quote 1.0.26",
@@ -141,7 +141,7 @@ checksum = "b9ccdd8f2a161be9bd5c023df56f1b2a0bd1d83872ae53b71a84a12c9bf6e842"
 dependencies = [
  "proc-macro2 1.0.56",
  "quote 1.0.26",
- "syn 2.0.13",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -309,7 +309,7 @@ dependencies = [
  "heck",
  "proc-macro2 1.0.56",
  "quote 1.0.26",
- "syn 2.0.13",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -402,18 +402,8 @@ version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a01d95850c592940db9b8194bc39f4bc0e89dee5c4265e4b1807c34a9aba453c"
 dependencies = [
- "darling_core 0.13.4",
- "darling_macro 0.13.4",
-]
-
-[[package]]
-name = "darling"
-version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b750cb3417fd1b327431a470f388520309479ab0bf5e323505daf0290cd3850"
-dependencies = [
- "darling_core 0.14.4",
- "darling_macro 0.14.4",
+ "darling_core",
+ "darling_macro",
 ]
 
 [[package]]
@@ -431,37 +421,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "darling_core"
-version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "109c1ca6e6b7f82cc233a97004ea8ed7ca123a9af07a8230878fcfda9b158bf0"
-dependencies = [
- "fnv",
- "ident_case",
- "proc-macro2 1.0.56",
- "quote 1.0.26",
- "strsim",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "darling_macro"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c972679f83bdf9c42bd905396b6c3588a843a17f0f16dfcfa3e2c5d57441835"
 dependencies = [
- "darling_core 0.13.4",
- "quote 1.0.26",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "darling_macro"
-version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4aab4dbc9f7611d8b55048a3a16d2d010c2c8334e46304b40ac1cc14bf3b48e"
-dependencies = [
- "darling_core 0.14.4",
+ "darling_core",
  "quote 1.0.26",
  "syn 1.0.109",
 ]
@@ -1160,6 +1125,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "indicatif"
+version = "0.17.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cef509aa9bc73864d6756f0d34d35504af3cf0844373afe9b8669a5b8005a729"
+dependencies = [
+ "console",
+ "number_prefix",
+ "portable-atomic",
+ "unicode-width",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1380,12 +1357,24 @@ name = "mashin"
 version = "0.1.3"
 dependencies = [
  "anyhow",
+ "atty",
  "clap",
+ "console",
+ "deno_ast",
+ "deno_core",
+ "deno_fetch",
  "dialoguer",
+ "encoding_rs",
  "env_logger",
+ "indicatif",
  "log",
  "mashin_runtime",
  "mashin_sdk",
+ "once_cell",
+ "rand",
+ "reqwest",
+ "ring",
+ "serde",
  "tokio",
 ]
 
@@ -1395,22 +1384,23 @@ version = "0.1.3"
 dependencies = [
  "anyhow",
  "async-trait",
- "atty",
  "base64 0.21.0",
+ "console",
  "deno_core",
  "dlopen",
+ "indicatif",
  "itertools",
  "libffi",
  "log",
  "mashin_sdk",
  "once_cell",
  "quote 1.0.26",
+ "reqwest",
  "rkv",
  "serde",
  "serde_json",
  "sodiumoxide",
- "syn 1.0.109",
- "termcolor",
+ "syn 2.0.15",
  "tokio",
  "url",
 ]
@@ -1420,12 +1410,11 @@ name = "mashin_macro"
 version = "0.1.4"
 dependencies = [
  "Inflector",
- "darling 0.14.4",
  "proc-macro2 1.0.56",
  "quote 1.0.26",
  "serde",
  "serde_json",
- "syn 1.0.109",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -1433,7 +1422,6 @@ name = "mashin_runtime"
 version = "0.1.3"
 dependencies = [
  "anyhow",
- "deno_ast",
  "deno_console",
  "deno_core",
  "deno_fetch",
@@ -1442,14 +1430,9 @@ dependencies = [
  "deno_webidl",
  "deno_websocket",
  "dlopen",
- "encoding_rs",
- "libc",
  "libffi",
  "log",
  "mashin_core",
- "rand",
- "reqwest",
- "ring",
  "serde",
  "serde-value",
  "tokio",
@@ -1463,8 +1446,10 @@ dependencies = [
  "anyhow",
  "async-trait",
  "env_logger",
+ "indicatif",
  "log",
  "mashin_macro",
+ "parking_lot",
  "serde",
  "serde_json",
  "tokio",
@@ -1550,6 +1535,12 @@ dependencies = [
  "hermit-abi 0.2.6",
  "libc",
 ]
+
+[[package]]
+name = "number_prefix"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
 name = "once_cell"
@@ -1726,6 +1717,12 @@ dependencies = [
  "quote 1.0.26",
  "syn 1.0.109",
 ]
+
+[[package]]
+name = "portable-atomic"
+version = "0.3.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26f6a7b87c2e435a3241addceeeff740ff8b7e76b74c13bf9acb17fa454ea00b"
 
 [[package]]
 name = "ppv-lite86"
@@ -2143,7 +2140,7 @@ checksum = "4c614d17805b093df4b147b51339e7e44bf05ef59fba1e45d83500bcfb4d8585"
 dependencies = [
  "proc-macro2 1.0.56",
  "quote 1.0.26",
- "syn 2.0.13",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -2751,9 +2748,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.13"
+version = "2.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c9da457c5285ac1f936ebd076af6dac17a61cfe7826f2076b4d015cf47bc8ec"
+checksum = "a34fcf3e8b60f57e6a14301a2e916d323af98b0ea63c599441eec8558660c822"
 dependencies = [
  "proc-macro2 1.0.56",
  "quote 1.0.26",
@@ -2808,7 +2805,7 @@ checksum = "f9456a42c5b0d803c8cd86e73dd7cc9edd429499f37a3550d286d5e86720569f"
 dependencies = [
  "proc-macro2 1.0.56",
  "quote 1.0.26",
- "syn 2.0.13",
+ "syn 2.0.15",
 ]
 
 [[package]]

@@ -20,10 +20,7 @@ use std::{
 };
 
 #[derive(Debug, Default)]
-pub struct ProviderState
-where
-	Self: Send + Sync,
-{
+pub struct ProviderState {
 	data: BTreeMap<TypeId, Box<dyn Any + Send + Sync>>,
 }
 

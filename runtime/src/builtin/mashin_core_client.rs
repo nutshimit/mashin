@@ -14,7 +14,6 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use crate::{http_client::HttpClient, js_log, log};
 use deno_core::{
 	error::{generic_error, type_error},
 	serde_json::{self, Value},
@@ -22,10 +21,9 @@ use deno_core::{
 };
 use dlopen::raw::Library;
 use mashin_core::{
-	colors,
 	sdk::{ext::anyhow::anyhow, ResourceAction, ResourceArgs, Result, Urn},
-	DynamicLibraryResource, ExecutedResource, ForeignFunction, MashinEngine, RegisteredProvider,
-	Symbol,
+	Config, DynamicLibraryResource, ExecutedResource, ForeignFunction, HttpCache, HttpClient,
+	MashinEngine, ProgressManager, RegisteredProvider, RuntimeCommand, Symbol,
 };
 use serde::Deserialize;
 use std::{
@@ -37,7 +35,7 @@ use std::{
 	str::FromStr,
 	sync::mpsc::{self, TryRecvError},
 	thread::{self, sleep},
-	time::{Duration, Instant},
+	time::Duration,
 };
 
 // only call if we want to overwrite the backend
@@ -56,12 +54,20 @@ pub struct ResourceExecuteArgs {
 }
 
 #[deno_core::op]
-pub(crate) fn as__runtime__resource_execute(
+pub(crate) fn as__runtime__resource_execute<T>(
 	op_state: &mut OpState,
 	args: ResourceExecuteArgs,
-) -> Result<serde_json::Value> {
-	let mashin = op_state.borrow_mut::<MashinEngine>();
+) -> Result<serde_json::Value>
+where
+	T: Config,
+{
+	let mashin = op_state.borrow_mut::<Rc<MashinEngine<T>>>();
 	let mut executed_resouces = mashin.executed_resources.borrow_mut();
+
+	if mashin.command == RuntimeCommand::Prepare {
+		mashin.inc_resources_count();
+		return Ok(Default::default())
+	}
 
 	// resource config
 	let raw_config = Rc::new(args.config);
@@ -74,6 +80,7 @@ pub(crate) fn as__runtime__resource_execute(
 	let display_urn = urn.as_display();
 
 	let already_executed_resource = executed_resouces.get(&urn);
+
 	let expected_resource_action =
 		if let Some(already_executed_resource) = already_executed_resource {
 			already_executed_resource.required_change.clone().unwrap_or(ResourceAction::Get)
@@ -81,11 +88,14 @@ pub(crate) fn as__runtime__resource_execute(
 			ResourceAction::Get
 		};
 
-	let start = Instant::now();
-	let present_participe_action =
-		expected_resource_action.action_present_participe_str().to_string();
-
-	log!(info, "[{}]: {}...", colors::bold(&display_urn), &present_participe_action,);
+	let pm = &mashin.progress_manager;
+	let pb = pm.progress_bar();
+	let isolated_pb = pb.clone();
+	if let Some(pb) = &pb {
+		pb.inc(1);
+		pb.set_message(display_urn);
+		pb.enable_steady_tick(Duration::from_secs(1));
+	}
 
 	let backend = mashin.state_handler.borrow();
 	let providers = mashin.providers.borrow();
@@ -104,31 +114,25 @@ pub(crate) fn as__runtime__resource_execute(
 	// launch a new thread to display the log if it take more than 5 seconds
 	// eg; aws:s3:bucket?=test1234atmos001: Refreshing... 10s
 	let (tx, rx) = mpsc::channel();
-	let isolated_urn = colors::bold(display_urn.clone());
-	thread::spawn(move || loop {
-		sleep(Duration::from_secs(5));
 
+	thread::spawn(move || loop {
+		sleep(Duration::from_secs(10));
 		match rx.try_recv() {
 			Ok(_) | Err(TryRecvError::Disconnected) => break,
 			Err(TryRecvError::Empty) => {},
 		};
-
-		log!(
-			info,
-			"[{isolated_urn}]: {}... {}s",
-			present_participe_action.clone(),
-			start.elapsed().as_secs()
-		);
+		if let Some(pb) = &isolated_pb {
+			pb.set_message("still working....");
+		}
 	});
 
 	// call the function
 	let args = ResourceArgs {
-		action: Rc::new(expected_resource_action.clone()),
+		action: Rc::new(expected_resource_action),
 		raw_config,
 		raw_state: raw_state.clone(),
 		urn: urn.clone(),
 	};
-
 	let provider_state = provider.dylib.call_resource(provider.ptr, &args)?;
 	let new_state = provider_state.inner().into();
 
@@ -153,13 +157,9 @@ pub(crate) fn as__runtime__resource_execute(
 		executed_resouces.remove(&urn);
 	}
 
-	log!(
-		info,
-		"[{}]: {} complete after {}s",
-		colors::bold(&display_urn),
-		expected_resource_action.action_present_str(),
-		start.elapsed().as_secs()
-	);
+	if let Some(pb) = &pb {
+		pb.disable_steady_tick();
+	}
 
 	Ok(new_state.generate_ts_output())
 }
@@ -178,10 +178,13 @@ pub struct ProviderDownloadArgs {
 }
 
 #[deno_core::op]
-pub async fn as__runtime__register_provider__download(
+pub async fn as__runtime__register_provider__download<T>(
 	op_state_rc: Rc<RefCell<OpState>>,
 	args: ProviderDownloadArgs,
-) -> Result<String> {
+) -> Result<String>
+where
+	T: Config,
+{
 	let provider = &args.provider;
 	let remote_url = &args.url;
 	let module_specifier = ModuleSpecifier::from_str(remote_url)?;
@@ -190,14 +193,14 @@ pub async fn as__runtime__register_provider__download(
 			ProviderDownloadSource::GithubRelease => {
 				let http_client = {
 					let op_state = op_state_rc.borrow();
-					op_state.borrow::<HttpClient>().clone()
+					let mashin = op_state.borrow::<Rc<MashinEngine<T>>>();
+					mashin.http_client.clone()
 				};
-
 				match http_client.cache().fetch_cached_path(&module_specifier, 10) {
 					Ok(Some(cache_filename)) => cache_filename.into_os_string().into_string(),
 					Ok(None) => {
 						let (remote_data, headers) =
-							http_client.download_with_headers(module_specifier.clone()).await?;
+							http_client.download_with_progress(&module_specifier).await?;
 						let file =
 							http_client.cache().set(&module_specifier, headers, &remote_data)?;
 						file.into_os_string().into_string()
@@ -220,15 +223,18 @@ pub struct ProviderAllocateArgs {
 }
 
 #[deno_core::op]
-pub fn as__runtime__register_provider__allocate(
+pub fn as__runtime__register_provider__allocate<T>(
 	op_state: &mut OpState,
 	args: ProviderAllocateArgs,
-) -> Result<()> {
+) -> Result<()>
+where
+	T: Config,
+{
 	let path = args.path;
 	let provider_name = args.name;
 	let props = args.props;
 
-	let mashin = op_state.borrow_mut::<MashinEngine>();
+	let mashin = op_state.borrow_mut::<Rc<MashinEngine<T>>>();
 	let mut providers = mashin.providers.borrow_mut();
 
 	let lib = Library::open(&path).map_err(|e| {
@@ -306,22 +312,23 @@ pub(crate) fn op_get_env(key: String) -> Result<Option<String>> {
 }
 
 #[deno_core::op]
-pub fn as__client_print(msg: &str, is_err: bool) -> Result<()> {
-	if is_err {
-		js_log!(error, "{}", msg);
-	} else {
-		js_log!(warn, "{}", msg);
-	}
+pub fn as__client_print(_msg: &str, _is_err: bool) -> Result<()> {
+	// FIXME: Build accumulator to print at the end of the read
+	//if is_err {
+	//js_log!(error, "{}", msg);
+	//} else {
+	//js_log!(warn, "{}", msg);
+	//}
 	Ok(())
 }
 
-pub(crate) fn op_decls() -> Vec<::deno_core::OpDecl> {
+pub(crate) fn op_decls<T: Config>() -> Vec<::deno_core::OpDecl> {
 	vec![
 		op_get_env::decl(),
 		as__client_print::decl(),
 		as__client_new::decl(),
-		as__runtime__register_provider__download::decl(),
-		as__runtime__register_provider__allocate::decl(),
-		as__runtime__resource_execute::decl(),
+		as__runtime__register_provider__download::decl::<T>(),
+		as__runtime__register_provider__allocate::decl::<T>(),
+		as__runtime__resource_execute::decl::<T>(),
 	]
 }

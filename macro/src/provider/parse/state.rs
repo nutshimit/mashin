@@ -14,14 +14,16 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use darling::ToTokens;
+use quote::ToTokens;
 use syn::spanned::Spanned;
 
-#[derive(Debug)]
+use super::get_doc_literals;
+
 pub struct StateDef {
 	pub index: usize,
 	pub attr_span: proc_macro2::Span,
 	pub ident: syn::Ident,
+	pub docs: Vec<syn::Expr>,
 }
 
 mod keyword {
@@ -47,7 +49,8 @@ impl StateDef {
 		}
 
 		syn::parse2::<keyword::State>(item.ident.to_token_stream())?;
+		let docs = get_doc_literals(&item.attrs);
 
-		Ok(Self { index, attr_span, ident: item.ident.clone() })
+		Ok(Self { index, attr_span, ident: item.ident.clone(), docs })
 	}
 }

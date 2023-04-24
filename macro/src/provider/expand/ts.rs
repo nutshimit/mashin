@@ -25,6 +25,7 @@ use std::{
 	io::{Read, Write},
 	path::Path,
 };
+use syn::{Expr, ExprLit, Lit};
 
 pub fn expand_ts(def: &mut Def) -> proc_macro2::TokenStream {
 	for item in def.extra_ts.iter() {
@@ -167,14 +168,32 @@ T
 	let crate_name = match env::var("MASHIN_PKG_NAME") {
 		Ok(version) => version,
 		Err(_e) => env!("CARGO_PKG_NAME").to_string(),
-	};
+	}
+	.replace('-', "_");
 
-	let _crate_version = match env::var("MASHIN_PKG_VERSION") {
+	let crate_version = match env::var("MASHIN_PKG_VERSION") {
 		Ok(version) => version,
 		Err(_e) => env!("CARGO_PKG_VERSION").to_string(),
 	};
 
-	let _github_url = &def.args.github_url;
+	let github_url = match env::var("MASHIN_PKG_REPOSITORY") {
+		Ok(repo) => repo,
+		Err(_e) => env!("CARGO_PKG_REPOSITORY").to_string(),
+	};
+
+	let docs = def
+		.provider
+		.docs
+		.iter()
+		.filter_map(|expr| {
+			if let Expr::Lit(ExprLit { lit: Lit::Str(lit_str), .. }) = expr {
+				Some(lit_str.value())
+			} else {
+				None
+			}
+		})
+		.collect::<Vec<String>>();
+	let provider_docs = format!("/**\n  *{}\n  **/\n", docs.join("\n  *"));
 
 	let header = format!(
 		r#"/* -------------------------------------------------------- *\
@@ -195,25 +214,32 @@ T
 
 import * as resource from "https://mashin.land/sdk/resource.ts";
 import {{ Inputs, Outputs }} from "https://mashin.land/sdk/output.ts";
+import {{ getFileName }} from "https://mashin.land/sdk/download.ts";
 
-const url = Deno.env.get("LOCAL_PLUGIN")
-  ? "./target/debug/lib{}.dylib"
-  : await globalThis.__mashin.downloadProvider(
-      "github", "https://github.com/lemarier/tauri-test/releases/download/v2.0.0/libatmosphere_test.dylib"
+export const VERSION = "{crate_version}";
+const LOCAL_PATH = Deno.env.get("LOCAL_PLUGIN")
+  ? "./target/debug/lib{crate_name}.dylib"
+	: await globalThis.__mashin.downloadProvider(
+      "github",
+      new URL(
+        getFileName("{crate_name}"),
+        `{github_url}/releases/download/v${{VERSION}}/`
+      ).toString()
     );
-"#,
-		crate_name.replace('-', "_")
+"#
 	);
 
-	let provider = r#"
-export class Provider extends resource.Provider {
-    constructor(name: string, args?: Config) {
+	let provider = format!(
+		r#"
+{provider_docs}
+export class Provider extends resource.Provider {{
+    constructor(name: string, args?: Config) {{
       // FIXME: have dynamic provider path for each OS
-      super(name, url, args);
-    }
-}
+      super(name, LOCAL_PATH, args);
+    }}
+}}
 "#
-	.to_string();
+	);
 
 	let final_output = format!("{header}\n{output}\n{provider}\n// {hash}");
 

@@ -16,11 +16,13 @@
 
 use crate::{
 	backend::BackendState,
-	colors,
+	config::Config,
+	mashin_dir::MashinDir,
 	state::{derive_key, StateDiff},
-	DynamicLibraryResource, RawState, Result,
+	DynamicLibraryResource, RawState, Result, RuntimeCommand,
 };
 use anyhow::anyhow;
+use console::style;
 use deno_core::Resource;
 use mashin_sdk::{ResourceAction, Urn};
 use sodiumoxide::crypto::{pwhash::Salt, secretbox};
@@ -30,10 +32,14 @@ use std::{
 	ffi::c_void,
 	ops::Deref,
 	rc::Rc,
+	sync::{
+		atomic::{AtomicU64, Ordering},
+		Arc,
+	},
 };
 
 pub type RegisteredProviders = HashMap<String, RegisteredProvider>;
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct ExecutedResources {
 	resources: BTreeMap<String, ExecutedResource>,
 }
@@ -88,31 +94,47 @@ impl ExecutedResources {
 				match action {
 					ResourceAction::Create => {
 						to_add += 1;
-						log::info!("  {} create", colors::green_bold("+"))
 					},
 					ResourceAction::Delete => {
 						to_remove += 1;
-						log::info!("  {} delete", colors::red_bold("-"))
 					},
 					ResourceAction::Update { .. } => {
 						to_update += 1;
-						log::info!("  {} update", colors::cyan_bold("*"))
 					},
 					_ => {},
 				}
 			}
 		}
 
-		log::info!("\nMashin will perform the following actions:\n");
+		if to_add > 0 {
+			log::info!("  {} create", style("+").green().bold())
+		}
 
-		for (urn, executed_resource) in self.iter() {
-			if let Err(err) = executed_resource.print_diff(urn) {
-				// mainly failing because there is no diff to apply
-				log::trace!("{err}")
+		if to_remove > 0 {
+			log::info!("  {} delete", style("-").red().bold())
+		}
+
+		if to_update > 0 {
+			log::info!("  {} update", style("*").cyan().bold())
+		}
+
+		if to_add > 0 || to_remove > 0 || to_update > 0 {
+			log::info!("\nMashin will perform the following actions:\n");
+
+			for (urn, executed_resource) in self.iter() {
+				if let Err(err) = executed_resource.print_diff(urn) {
+					// mainly failing because there is no diff to apply
+					log::trace!("{err}")
+				}
 			}
 		}
 
-		log::info!("Plan: {} to add, {} to change, {} to destroy.", to_add, to_update, to_remove);
+		log::info!(
+			"\n    Plan: {} to add, {} to change, {} to destroy.",
+			to_add,
+			to_update,
+			to_remove
+		);
 	}
 }
 
@@ -123,7 +145,7 @@ pub struct RegisteredProvider {
 	pub ptr: *mut c_void,
 }
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct ExecutedResource {
 	// provider name
 	pub provider: String,
@@ -165,16 +187,16 @@ impl ExecutedResource {
 		let mut total_changes_processed = 0;
 
 		let arrow = match &resource_action {
-			ResourceAction::Update { .. } => colors::cyan_bold("-->").to_string(),
-			ResourceAction::Create => colors::green_bold("-->").to_string(),
-			ResourceAction::Delete => colors::red_bold("-->").to_string(),
+			ResourceAction::Update { .. } => style("-->").cyan().bold().to_string(),
+			ResourceAction::Create => style("-->").green().bold().to_string(),
+			ResourceAction::Delete => style("-->").red().bold().to_string(),
 			_ => "".to_string(),
 		};
 
 		//    --> [aws:s3:bucket?=test1234atmos1000]: Need to be created
 		log::info!(
 			"   {arrow} [{}]: Need to be {}",
-			colors::bold(urn.replace("urn:provider:", "")),
+			style(urn.replace("urn:provider:", "")).bold(),
 			resource_action.action_past_str().to_lowercase()
 		);
 
@@ -196,40 +218,136 @@ impl ExecutedResource {
 	}
 }
 
-/// Instance of a single client for an Mashin consumer.
-pub struct MashinEngine {
-	pub state_handler: Rc<RefCell<BackendState>>,
-	pub key: secretbox::Key,
-	pub providers: Rc<RefCell<RegisteredProviders>>,
-	pub executed_resources: Rc<RefCell<ExecutedResources>>,
+#[derive(Default)]
+pub struct MashinBuilder<'a, T: Config> {
+	state_handler: Option<Rc<RefCell<BackendState>>>,
+	passphrase: Option<&'a [u8]>,
+	executed_resources: Option<Rc<RefCell<ExecutedResources>>>,
+	progress_manager: Option<Rc<T::ProgressManager>>,
+	http_client: Option<Rc<T::HttpClient>>,
+	mashin_dir: Option<MashinDir>,
+	runtime_command: Option<RuntimeCommand>,
+	resources_count: Option<u64>,
+	salt: Option<&'a [u8; 32]>,
 }
+impl<'a, T: Config> MashinBuilder<'a, T> {
+	pub fn new() -> Self {
+		MashinBuilder {
+			state_handler: None,
+			passphrase: None,
+			executed_resources: None,
+			progress_manager: None,
+			http_client: None,
+			mashin_dir: None,
+			runtime_command: None,
+			resources_count: None,
+			salt: None,
+		}
+	}
 
-impl Resource for MashinEngine {} // Blank impl
+	pub fn with_state_handler(&mut self, handler: Rc<RefCell<BackendState>>) -> &mut Self {
+		self.state_handler = Some(handler);
+		self
+	}
 
-impl MashinEngine {
-	pub fn new(
-		state_handler: Rc<RefCell<BackendState>>,
-		passphrase: &[u8],
+	pub fn with_passphrase(&mut self, passphrase: &'a [u8]) -> &mut Self {
+		self.passphrase = Some(passphrase);
+		self
+	}
+
+	pub fn with_executed_resources(
+		&mut self,
 		executed_resources: Option<Rc<RefCell<ExecutedResources>>>,
-	) -> Result<Self> {
-		// FIXME: use dynamic salt
-		let salt = Salt([
+	) -> &mut Self {
+		self.executed_resources = executed_resources;
+		self
+	}
+
+	pub fn with_progress_manager(&mut self, progress_manager: Rc<T::ProgressManager>) -> &mut Self {
+		self.progress_manager = Some(progress_manager);
+		self
+	}
+
+	pub fn with_http_client(&mut self, http_client: Rc<T::HttpClient>) -> &mut Self {
+		self.http_client = Some(http_client);
+		self
+	}
+
+	pub fn with_mashin_dir(&mut self, mashin_dir: MashinDir) -> &mut Self {
+		self.mashin_dir = Some(mashin_dir);
+		self
+	}
+
+	pub fn with_runtime_command(&mut self, runtime_command: RuntimeCommand) -> &mut Self {
+		self.runtime_command = Some(runtime_command);
+		self
+	}
+
+	pub fn with_resources_count(&mut self, resources_count: u64) -> &mut Self {
+		self.resources_count = Some(resources_count);
+		self
+	}
+
+	pub fn with_salt(&mut self, salt: &'a [u8; 32]) -> &mut Self {
+		self.salt = Some(salt);
+		self
+	}
+
+	pub fn build(&self) -> Result<MashinEngine<T>> {
+		let mashin_dir = self.mashin_dir.clone().unwrap_or_default();
+		let salt = Salt(*self.salt.unwrap_or(&[
 			0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
 			24, 25, 26, 27, 28, 29, 30, 31,
-		]);
+		]));
+		let key = derive_key(self.passphrase.unwrap_or_default(), salt)?;
 
-		let key = derive_key(passphrase, salt)?;
-
-		Ok(Self {
-			state_handler,
+		Ok(MashinEngine {
+			resources_count: Arc::new(AtomicU64::new(self.resources_count.unwrap_or_default())),
+			command: self.runtime_command.clone().unwrap_or(RuntimeCommand::Prepare),
+			mashin_dir,
+			state_handler: self
+				.state_handler
+				.clone()
+				.ok_or(anyhow!("State handler is required"))?,
 			key,
+			executed_resources: self.executed_resources.clone().unwrap_or_default(),
+			progress_manager: self
+				.progress_manager
+				.clone()
+				.ok_or(anyhow!("Progress manager is required"))?,
+			http_client: self.http_client.clone().ok_or(anyhow!("HTTP Client is required"))?,
 			providers: Default::default(),
-			executed_resources: executed_resources.unwrap_or_default(),
 		})
 	}
 }
 
-impl Drop for MashinEngine {
+/// Instance of a single client for an Mashin consumer.
+pub struct MashinEngine<T: Config> {
+	pub resources_count: Arc<AtomicU64>,
+	pub command: RuntimeCommand,
+	pub mashin_dir: MashinDir,
+	pub state_handler: Rc<RefCell<BackendState>>,
+	pub key: secretbox::Key,
+	pub executed_resources: Rc<RefCell<ExecutedResources>>,
+	pub progress_manager: Rc<T::ProgressManager>,
+	pub http_client: Rc<T::HttpClient>,
+	pub providers: Rc<RefCell<RegisteredProviders>>,
+}
+
+impl<T: Config> Resource for MashinEngine<T> {} // Blank impl
+
+impl<T: Config> MashinEngine<T> {
+	pub fn resources_count(&self) -> u64 {
+		self.resources_count.load(Ordering::Relaxed)
+	}
+
+	pub fn inc_resources_count(&self) {
+		let current_value = self.resources_count();
+		self.resources_count.store(current_value.saturating_add(1), Ordering::Relaxed);
+	}
+}
+
+impl<T: Config> Drop for MashinEngine<T> {
 	fn drop(&mut self) {
 		let drop_provider = |(_, provider): (_, &RegisteredProvider)| {
 			if let Err(err) = provider.dylib.call_drop(provider.ptr) {
