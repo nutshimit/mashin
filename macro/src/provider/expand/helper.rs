@@ -157,8 +157,6 @@ pub fn process_struct(
 				typescript.push(variant_str);
 			}
 
-			// TODO: `type_defs` in favor of `ts_types`
-
 			let doc_str = get_docs(attrs);
 
 			def.type_defs.insert(

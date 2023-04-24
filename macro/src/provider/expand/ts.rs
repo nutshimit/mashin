@@ -25,7 +25,7 @@ use std::{
 	io::{Read, Write},
 	path::Path,
 };
-use syn::{Expr, Lit};
+use syn::{Expr, ExprLit, Lit};
 
 pub fn expand_ts(def: &mut Def) -> proc_macro2::TokenStream {
 	for item in def.extra_ts.iter() {
@@ -186,12 +186,11 @@ T
 		.docs
 		.iter()
 		.filter_map(|expr| {
-			if let Expr::Lit(expr_lit) = expr {
-				if let Lit::Str(lit_str) = &expr_lit.lit {
-					return Some(lit_str.value())
-				}
+			if let Expr::Lit(ExprLit { lit: Lit::Str(lit_str), .. }) = expr {
+				Some(lit_str.value())
+			} else {
+				None
 			}
-			None
 		})
 		.collect::<Vec<String>>();
 	let provider_docs = format!("/**\n  *{}\n  **/\n", docs.join("\n  *"));
