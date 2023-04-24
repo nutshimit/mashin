@@ -205,9 +205,7 @@ impl<R: Serialize> ResourceSerialize for R {
 
 #[async_trait]
 pub trait ProviderBuilder {
-	async fn build(&mut self) -> Result<()> {
-		Ok(())
-	}
+	async fn build(&mut self) -> Result<()>;
 }
 
 pub trait ProviderDefault {

@@ -239,7 +239,7 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 				eprintln!();
 				eprintln!("Platform: {} {}", std::env::consts::OS, std::env::consts::ARCH);
 				eprintln!("Version: {}", std::env!("CARGO_PKG_VERSION"));
-				eprintln!("Provider: {}", provider_name);
+				eprintln!("Provider: {}", #provider_name);
 				eprintln!("Args: {:?}", std::env::args().collect::<Vec<_>>());
 				eprintln!();
 				orig_hook(panic_info);

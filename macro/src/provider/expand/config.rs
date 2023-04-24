@@ -35,7 +35,5 @@ pub fn expand_config(def: &mut Def) -> proc_macro2::TokenStream {
 
 	config_item.attrs.push(syn::parse_quote!(#[serde(rename_all = "camelCase")]));
 
-	quote::quote! {
-		impl ::mashin_sdk::Config for #ident {}
-	}
+	quote::quote! {}
 }
