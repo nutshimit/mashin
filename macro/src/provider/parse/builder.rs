@@ -16,10 +16,12 @@
 
 use syn::spanned::Spanned;
 
-#[derive(Debug)]
+use super::get_doc_literals;
+
 pub struct BuilderDef {
 	pub index: usize,
 	pub attr_span: proc_macro2::Span,
+	pub docs: Vec<syn::Expr>,
 }
 
 mod keyword {
@@ -32,13 +34,15 @@ impl BuilderDef {
 		index: usize,
 		item: &mut syn::Item,
 	) -> syn::Result<Self> {
-		let _item = if let syn::Item::Impl(item) = item {
+		let item = if let syn::Item::Impl(item) = item {
 			item
 		} else {
 			let msg = "Invalid mashin::builder, expected struct";
 			return Err(syn::Error::new(item.span(), msg))
 		};
 
-		Ok(Self { index, attr_span })
+		let docs = get_doc_literals(&item.attrs);
+
+		Ok(Self { index, attr_span, docs })
 	}
 }

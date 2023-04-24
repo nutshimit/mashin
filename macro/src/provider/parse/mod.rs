@@ -14,7 +14,6 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use super::ProviderMetadataArgs;
 use std::collections::HashMap;
 use syn::spanned::Spanned;
 pub use ts::{InternalMashinType, TsType};
@@ -28,10 +27,8 @@ mod state;
 mod ts;
 
 /// Parsed definition of a provider.
-#[derive(Debug)]
 pub struct Def {
 	pub item: syn::ItemMod,
-	pub args: ProviderMetadataArgs,
 	pub provider: provider::ProviderDef,
 	pub config: config::ConfigDef,
 	pub state: state::StateDef,
@@ -44,7 +41,7 @@ pub struct Def {
 }
 
 impl Def {
-	pub fn try_from(mut item: syn::ItemMod, args: ProviderMetadataArgs) -> syn::Result<Self> {
+	pub fn try_from(mut item: syn::ItemMod) -> syn::Result<Self> {
 		let item_span = item.span();
 		let items = &mut item
 			.content
@@ -95,7 +92,6 @@ impl Def {
 
 		let def = Def {
 			item,
-			args,
 			resources,
 			resources_impl,
 			resources_config,
@@ -199,4 +195,21 @@ impl syn::parse::Parse for ProviderAttr {
 
 		Err(lookahead.error())
 	}
+}
+
+/// Return all doc attributes literals found.
+pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Expr> {
+	attrs
+		.iter()
+		.filter_map(|attr| {
+			if let syn::Meta::NameValue(meta) = &attr.meta {
+				meta.path
+					.get_ident()
+					.filter(|ident| *ident == "doc")
+					.map(|_| meta.value.clone())
+			} else {
+				None
+			}
+		})
+		.collect()
 }

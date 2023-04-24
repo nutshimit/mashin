@@ -15,6 +15,8 @@
 \* ---------------------------------------------------------*/
 
 use crate::provider::parse::Def;
+use inflector::Inflector;
+use quote::format_ident;
 use std::env;
 use syn::Item;
 
@@ -34,6 +36,7 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 	let config = &def.config.ident;
 	let vis = &provider_item.vis;
 	let ident = &provider_item.ident;
+	let isolated_ident = format_ident!("{}", ident.to_string().to_snake_case());
 
 	let fields = provider_item.fields.iter().collect::<Vec<_>>();
 	let provider_name = match env::var("MASHIN_PKG_NAME") {
@@ -55,6 +58,8 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 	});
 
+	let docs = &def.provider.docs;
+
 	quote::quote_spanned! { def.provider.attr_span =>
 		macro_rules! log {
 			($level:tt,  $patter:expr $(, $values:expr)* $(,)?) => {
@@ -65,55 +70,57 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 			};
 		}
 		pub(super) use log;
+		#vis use #isolated_ident::#ident;
 
-		#[derive(Default)]
-		#vis struct #ident {
-			#(#fields,)*
-			__config: #config,
-			__state: Box<::mashin_sdk::ProviderState>,
-		}
+		mod #isolated_ident {
+			use super::*;
 
-		impl #ident {
-			pub fn config(&self) -> &#config {
-				&self.__config
+			#[derive(Default)]
+			#( #[doc = #docs] )*
+			#vis struct #ident {
+				#(#fields,)*
+				__config: #config,
+				__state: ::std::sync::Arc<::mashin_sdk::ext::parking_lot::Mutex<::mashin_sdk::ProviderState>>,
 			}
 
-			pub fn update_config(&mut self, config: ::mashin_sdk::ext::serde_json::Value) -> ::mashin_sdk::Result<()> {
-				self.__config = ::mashin_sdk::ext::serde_json::from_value(config)?;
-				Ok(())
-			}
-		}
+			impl #ident {
+				pub fn config(&self) -> &#config {
+					&self.__config
+				}
 
-		impl mashin_sdk::ProviderDefault for #ident {
-			fn state_as_ref(&self) -> &mashin_sdk::ProviderState {
-				self.__state.as_ref()
-			}
-
-			fn state(&mut self) -> &mut Box<::mashin_sdk::ProviderState> {
-				&mut self.__state
-			}
-
-			fn __from_current_state(
-				&self,
-				urn: &::std::rc::Rc<::mashin_sdk::Urn>,
-				state: &::std::rc::Rc<::std::cell::RefCell<::mashin_sdk::ext::serde_json::Value>>,
-			) -> ::mashin_sdk::Result<::std::rc::Rc<::std::cell::RefCell<dyn ::mashin_sdk::Resource>>> {
-				let raw_urn = urn.nss().split(':').collect::<Vec<_>>()[1..].join(":");
-				// expect; s3:bucket
-				let module_urn = raw_urn.to_lowercase();
-				// resource name
-				let name = urn
-					.q_component()
-					.ok_or(::mashin_sdk::ext::anyhow::anyhow!("expect valid urn (name not found)"))?;
-
-				match module_urn.as_str() {
-					#( #resources_map )*
-					_ => ::mashin_sdk::ext::anyhow::bail!("invalid URN"),
+				pub fn update_config(&mut self, config: ::mashin_sdk::ext::serde_json::Value) -> ::mashin_sdk::Result<()> {
+					self.__config = ::mashin_sdk::ext::serde_json::from_value(config)?;
+					Ok(())
 				}
 			}
-		}
 
-		impl mashin_sdk::Provider for #ident {}
+			impl mashin_sdk::ProviderDefault for #ident {
+				fn state(&mut self) -> ::std::sync::Arc<::mashin_sdk::ext::parking_lot::Mutex<::mashin_sdk::ProviderState>> {
+					self.__state.clone()
+				}
+
+				fn build_resource(
+					&self,
+					urn: &::std::rc::Rc<::mashin_sdk::Urn>,
+					state: &::std::rc::Rc<::std::cell::RefCell<::mashin_sdk::ext::serde_json::Value>>,
+				) -> ::mashin_sdk::Result<::std::rc::Rc<::std::cell::RefCell<dyn ::mashin_sdk::Resource>>> {
+					let raw_urn = urn.nss().split(':').collect::<Vec<_>>()[1..].join(":");
+					// expect; s3:bucket
+					let module_urn = raw_urn.to_lowercase();
+					// resource name
+					let name = urn
+						.q_component()
+						.ok_or(::mashin_sdk::ext::anyhow::anyhow!("expect valid urn (name not found)"))?;
+
+					match module_urn.as_str() {
+						#( #resources_map )*
+						_ => ::mashin_sdk::ext::anyhow::bail!("invalid URN"),
+					}
+				}
+			}
+
+			impl mashin_sdk::Provider for #ident {}
+		}
 
 		#[cfg(test)]
 		mod __provider {
@@ -176,19 +183,19 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 				args: ::mashin_sdk::ResourceArgs
 			) -> Vec<u8> {
 				let runtime = ::mashin_sdk::ext::tokio::runtime::Runtime::new().expect("New runtime");
-				let provider_state = provider.state_as_ref();
+				let provider_state = provider.state();
 				let urn = &args.urn;
 				let raw_config = &args.raw_config.clone();
 				let raw_state = &args.raw_state.clone();
 
 				let resource = provider
-					.__from_current_state(urn, raw_state)
+					.build_resource(urn, raw_state)
 					.expect("valid raw state");
 
 				let mut resource = resource.borrow_mut();
 
 				// grab the state before applying our values
-				resource.__set_config_from_value(raw_config);
+				resource.set_raw_config(raw_config);
 
 				runtime
 					.block_on(async {

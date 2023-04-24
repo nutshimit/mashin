@@ -23,6 +23,10 @@ pub fn build() {
 		println!("cargo:rustc-env=MASHIN_PKG_NAME={}", name);
 	}
 
+	if let Ok(repo) = std::env::var("CARGO_PKG_REPOSITORY") {
+		println!("cargo:rustc-env=MASHIN_PKG_REPOSITORY={}", repo);
+	}
+
 	if let Ok(target) = std::env::var("CARGO_MANIFEST_DIR") {
 		println!("cargo:rustc-env=TARGET={}", target);
 	}

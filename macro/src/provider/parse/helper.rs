@@ -14,7 +14,7 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use darling::ToTokens;
+use quote::ToTokens;
 
 pub trait MutItemAttrs {
 	fn mut_item_attrs(&mut self) -> Option<&mut Vec<syn::Attribute>>;
@@ -43,7 +43,11 @@ where
 	let attrs = if let Some(attrs) = item.mut_item_attrs() { attrs } else { return Ok(None) };
 
 	if let Some(index) = attrs.iter().position(|attr| {
-		attr.path.segments.first().map_or(false, |segment| segment.ident == "mashin")
+		attr.meta
+			.path()
+			.segments
+			.first()
+			.map_or(false, |segment| segment.ident == "mashin")
 	}) {
 		let pallet_attr = attrs.remove(index);
 		Ok(Some(syn::parse2(pallet_attr.into_token_stream())?))
@@ -62,7 +66,6 @@ impl MutItemAttrs for syn::Item {
 			Self::ForeignMod(item) => Some(item.attrs.as_mut()),
 			Self::Impl(item) => Some(item.attrs.as_mut()),
 			Self::Macro(item) => Some(item.attrs.as_mut()),
-			Self::Macro2(item) => Some(item.attrs.as_mut()),
 			Self::Mod(item) => Some(item.attrs.as_mut()),
 			Self::Static(item) => Some(item.attrs.as_mut()),
 			Self::Struct(item) => Some(item.attrs.as_mut()),
@@ -80,7 +83,7 @@ impl MutItemAttrs for syn::TraitItem {
 	fn mut_item_attrs(&mut self) -> Option<&mut Vec<syn::Attribute>> {
 		match self {
 			Self::Const(item) => Some(item.attrs.as_mut()),
-			Self::Method(item) => Some(item.attrs.as_mut()),
+			Self::Fn(item) => Some(item.attrs.as_mut()),
 			Self::Type(item) => Some(item.attrs.as_mut()),
 			Self::Macro(item) => Some(item.attrs.as_mut()),
 			_ => None,
@@ -100,7 +103,7 @@ impl MutItemAttrs for syn::ItemMod {
 	}
 }
 
-impl MutItemAttrs for syn::ImplItemMethod {
+impl MutItemAttrs for syn::ImplItemFn {
 	fn mut_item_attrs(&mut self) -> Option<&mut Vec<syn::Attribute>> {
 		Some(&mut self.attrs)
 	}
@@ -109,7 +112,7 @@ impl MutItemAttrs for syn::ImplItem {
 	fn mut_item_attrs(&mut self) -> Option<&mut Vec<syn::Attribute>> {
 		match self {
 			syn::ImplItem::Const(i) => Some(i.attrs.as_mut()),
-			syn::ImplItem::Method(i) => Some(i.attrs.as_mut()),
+			syn::ImplItem::Fn(i) => Some(i.attrs.as_mut()),
 			syn::ImplItem::Type(i) => Some(i.attrs.as_mut()),
 			syn::ImplItem::Macro(i) => Some(i.attrs.as_mut()),
 			_ => None,

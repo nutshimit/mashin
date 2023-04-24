@@ -17,13 +17,13 @@
 use std::hash::{Hash, Hasher};
 use syn::spanned::Spanned;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TsDef {
 	pub index: usize,
 	pub attr_span: proc_macro2::Span,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TsType {
 	pub doc: String,
 	pub name: String,
@@ -47,7 +47,7 @@ impl Hash for TsType {
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum InternalMashinType {
 	ProviderConfig,
 	ResourceConfig,

@@ -14,13 +14,15 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use darling::ToTokens;
+use quote::ToTokens;
 use syn::spanned::Spanned;
 
-#[derive(Debug)]
+use super::get_doc_literals;
+
 pub struct ProviderDef {
 	pub index: usize,
 	pub attr_span: proc_macro2::Span,
+	pub docs: Vec<syn::Expr>,
 }
 
 mod keyword {
@@ -45,8 +47,10 @@ impl ProviderDef {
 			return Err(syn::Error::new(item.span(), msg))
 		}
 
+		let docs = get_doc_literals(&item.attrs);
+
 		syn::parse2::<keyword::Provider>(item.ident.to_token_stream())?;
 
-		Ok(Self { index, attr_span })
+		Ok(Self { index, attr_span, docs })
 	}
 }

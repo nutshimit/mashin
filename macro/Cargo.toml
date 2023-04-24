@@ -17,6 +17,5 @@ quote.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
-darling = "0.14.4"
 proc-macro2 = "1.0.56"
 Inflector = "0.11.4"
