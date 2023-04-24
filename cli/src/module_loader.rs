@@ -1,18 +1,34 @@
+/* -------------------------------------------------------- *\
+ *                                                          *
+ *      ███╗░░░███╗░█████╗░░██████╗██╗░░██╗██╗███╗░░██╗     *
+ *      ████╗░████║██╔══██╗██╔════╝██║░░██║██║████╗░██║     *
+ *      ██╔████╔██║███████║╚█████╗░███████║██║██╔██╗██║     *
+ *      ██║╚██╔╝██║██╔══██║░╚═══██╗██╔══██║██║██║╚████║     *
+ *      ██║░╚═╝░██║██║░░██║██████╔╝██║░░██║██║██║░╚███║     *
+ *      ╚═╝░░░░░╚═╝╚═╝░░╚═╝╚═════╝░╚═╝░░╚═╝╚═╝╚═╝░░╚══╝     *
+ *                                         by Nutshimit     *
+ * -------------------------------------------------------- *
+ *                                                          *
+ *   This file is dual-licensed as Apache-2.0 or GPL-3.0.   *
+ *   see LICENSE for license details.                       *
+ *                                                          *
+\* ---------------------------------------------------------*/
+
 use crate::{
 	cache::{get_source_from_bytes, SourceFile},
 	http_client::{fetch_once, FetchOnceArgs, FetchOnceResult, HttpClient},
 	Result,
 };
 use anyhow::{anyhow, bail};
+use console::style;
 use deno_ast::{MediaType, ParseParams, SourceTextInfo};
 use deno_core::{
 	error::uri_error,
 	futures::{self, FutureExt},
-	resolve_import, Extension, JsRuntime, ModuleLoader, ModuleSource, ModuleSourceFuture,
-	ModuleSpecifier, ModuleType, OpDecl, ResolutionKind, RuntimeOptions,
+	resolve_import, ModuleLoader, ModuleSource, ModuleSourceFuture, ModuleSpecifier, ModuleType,
+	ResolutionKind,
 };
-use mashin_runtime::colors;
-use mashin_sdk::{HttpCache as _, HttpClient as _};
+use mashin_runtime::HttpCache as _;
 use std::{fs, future::Future, pin::Pin, sync::Arc};
 
 #[derive(Debug, Clone)]
@@ -26,20 +42,21 @@ impl TypescriptModuleLoader {
 		path: &ModuleSpecifier,
 		redirect_limit: i64,
 	) -> Pin<Box<dyn Future<Output = Result<SourceFile>> + Send>> {
-		match self.http_client.http_cache.fetch_cached(path, redirect_limit) {
-			Ok(Some(file)) => return futures::future::ok(file).boxed(),
-			Ok(None) => {},
-			Err(err) => return futures::future::err(err).boxed(),
-		}
 		let http_client = self.http_client.clone();
 		let http_cache = http_client.http_cache.clone();
 		let module_loader = self.clone();
 		let path = path.clone();
-		let mut maybe_progress_guard = None;
-		if let Some(pb) = http_client.progress_bar.as_ref() {
-			maybe_progress_guard = Some(pb.update(path.as_str()));
+
+		match http_cache.fetch_cached(&path, redirect_limit) {
+			Ok(Some(file)) => return futures::future::ok(file).boxed(),
+			Ok(None) => {},
+			Err(err) => return futures::future::err(err).boxed(),
+		}
+		let mut multi_progress = None;
+		if let Some(mp) = http_client.progress_bar.as_ref() {
+			multi_progress = Some(mp.clone());
 		} else {
-			log::log!(http_client.download_log_level, "{} {}", colors::green("Download"), path);
+			log::log!(http_client.download_log_level, "{} {}", style("Download").green(), path);
 		}
 		async move {
 			match fetch_once(
@@ -48,23 +65,20 @@ impl TypescriptModuleLoader {
 					url: path.clone(),
 					maybe_accept: None,
 					maybe_etag: None,
-					maybe_progress_guard: maybe_progress_guard.as_ref(),
+					multi_progress,
 				},
 			)
 			.await?
 			{
-				FetchOnceResult::NotModified => {
-					let file = http_cache.fetch_cached(&path, 10)?.unwrap();
-					Ok(file)
-				},
+				FetchOnceResult::NotModified =>
+					http_cache.fetch_cached(&path, 10)?.ok_or(anyhow!("nuable to fetch cache")),
 				FetchOnceResult::Redirect(redirect_url, headers) => {
 					http_cache.set(&path, headers, &[])?;
 					module_loader.load_from_remote_url(&redirect_url, redirect_limit - 1).await
 				},
 				FetchOnceResult::Code(bytes, headers) => {
 					http_cache.set(&path, headers.clone(), &bytes)?;
-					let file = http_cache.build_remote_file(&path, bytes, &headers)?;
-					Ok(file)
+					http_cache.build_remote_file(&path, bytes, &headers)
 				},
 			}
 		}

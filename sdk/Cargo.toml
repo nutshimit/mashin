@@ -18,4 +18,5 @@ tokio.workspace = true
 log.workspace = true
 env_logger.workspace = true
 urn.workspace = true
-reqwest.workspace = true
+indicatif.workspace = true
+parking_lot.workspace = true

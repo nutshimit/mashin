@@ -13,35 +13,36 @@
  *   see LICENSE for license details.                       *
  *                                                          *
 \* ---------------------------------------------------------*/
-use crate::{
-	cache::HttpCache,
-	util::progress_bar::{ProgressBar, UpdateGuard},
-	Result,
-};
+
+use crate::{cache::HttpCache, Result};
 use anyhow::bail;
 use deno_core::{
 	error::{custom_error, generic_error},
 	futures::StreamExt,
 };
 use deno_fetch::create_http_client;
-use mashin_sdk::{ext::async_trait::async_trait, HeadersMap};
+use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
+use mashin_runtime::HeadersMap;
+use mashin_sdk::ext::async_trait::async_trait;
 use reqwest::{
 	header::{HeaderValue, ACCEPT, IF_NONE_MATCH, LOCATION},
 	Response, StatusCode, Url,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Write};
 
 #[derive(Debug, Clone)]
 pub struct HttpClient {
 	client: reqwest::Client,
 	pub http_cache: HttpCache,
-	pub progress_bar: Option<ProgressBar>,
+	pub progress_bar: Option<MultiProgress>,
 	pub allow_remote: bool,
 	pub download_log_level: log::Level,
 }
 
 #[async_trait]
-impl mashin_sdk::HttpClient for HttpClient {
+impl mashin_runtime::HttpClient for HttpClient {
+	type Cache = HttpCache;
+
 	async fn download_with_headers(&self, url: &reqwest::Url) -> Result<(Vec<u8>, HeadersMap)> {
 		let maybe_bytes = self.inner_download(url, None).await?;
 		match maybe_bytes {
@@ -50,18 +51,12 @@ impl mashin_sdk::HttpClient for HttpClient {
 		}
 	}
 
-	fn cache(&self) -> Box<&dyn mashin_sdk::HttpCache> {
-		Box::new(&self.http_cache)
+	fn cache(&self) -> &Self::Cache {
+		&self.http_cache
 	}
 
 	async fn download_with_progress(&self, url: &reqwest::Url) -> Result<(Vec<u8>, HeadersMap)> {
-		let maybe_bytes = if let Some(progress_bar) = &self.progress_bar {
-			let guard = progress_bar.update(url.as_str());
-			self.inner_download(url, Some(&guard)).await
-		} else {
-			self.inner_download(url, None).await
-		}?;
-
+		let maybe_bytes = self.inner_download(url, self.progress_bar.as_ref()).await?;
 		match maybe_bytes {
 			(Some(bytes), headers) => Ok((bytes, headers)),
 			(None, _) => Err(custom_error("Http", "Not found.")),
@@ -75,7 +70,7 @@ impl HttpClient {
 		unsafely_ignore_certificate_errors: Option<Vec<String>>,
 		allow_remote: bool,
 		download_log_level: log::Level,
-		progress_bar: Option<ProgressBar>,
+		progress_bar: Option<MultiProgress>,
 	) -> Result<Self> {
 		Ok(Self {
 			client: create_http_client(
@@ -109,7 +104,7 @@ impl HttpClient {
 	async fn inner_download(
 		&self,
 		url: &reqwest::Url,
-		progress_guard: Option<&UpdateGuard>,
+		progress_guard: Option<&MultiProgress>,
 	) -> Result<(Option<Vec<u8>>, HeadersMap)> {
 		let response = self.get_redirected_response(url).await?;
 
@@ -212,17 +207,14 @@ pub enum FetchOnceResult {
 }
 
 #[derive(Debug)]
-pub struct FetchOnceArgs<'a> {
+pub struct FetchOnceArgs {
 	pub url: reqwest::Url,
 	pub maybe_accept: Option<String>,
 	pub maybe_etag: Option<String>,
-	pub maybe_progress_guard: Option<&'a UpdateGuard>,
+	pub multi_progress: Option<MultiProgress>,
 }
 
-pub async fn fetch_once<'a>(
-	http_client: &HttpClient,
-	args: FetchOnceArgs<'a>,
-) -> Result<FetchOnceResult> {
+pub async fn fetch_once(http_client: &HttpClient, args: FetchOnceArgs) -> Result<FetchOnceResult> {
 	let mut request = http_client.get_no_redirect(&args.url);
 
 	if let Some(etag) = args.maybe_etag {
@@ -268,27 +260,32 @@ pub async fn fetch_once<'a>(
 		return Err(err)
 	}
 
-	let body = get_response_body_with_progress(response, args.maybe_progress_guard).await?;
+	let body = get_response_body_with_progress(response, args.multi_progress.as_ref()).await?;
 
 	Ok(FetchOnceResult::Code(body.to_vec(), result_headers))
 }
 
 pub async fn get_response_body_with_progress(
 	response: reqwest::Response,
-	progress_guard: Option<&UpdateGuard>,
+	multi_progress: Option<&MultiProgress>,
 ) -> Result<Vec<u8>> {
-	if let Some(progress_guard) = progress_guard {
+	if let Some(multi_progress) = multi_progress {
 		if let Some(total_size) = response.content_length() {
-			progress_guard.set_total_size(total_size);
+			let progress_bar = multi_progress.add(ProgressBar::new(total_size));
+			progress_bar.set_message(response.url().to_string());
+			progress_bar.set_style(
+				ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})").unwrap().with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap()).progress_chars("#>-")
+			);
 			let mut current_size = 0;
 			let mut data = Vec::with_capacity(total_size as usize);
 			let mut stream = response.bytes_stream();
 			while let Some(item) = stream.next().await {
 				let bytes = item?;
 				current_size += bytes.len() as u64;
-				progress_guard.set_position(current_size);
+				progress_bar.set_position(current_size);
 				data.extend(bytes.into_iter());
 			}
+			progress_bar.finish_and_clear();
 			return Ok(data)
 		}
 	}

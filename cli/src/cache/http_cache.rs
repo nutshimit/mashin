@@ -21,7 +21,7 @@ use deno_core::{
 	error::{custom_error, generic_error},
 	serde_json,
 };
-use mashin_sdk::HeadersMap;
+use mashin_runtime::HeadersMap;
 use reqwest::Url;
 use ring::digest::{Context, SHA256};
 use serde::{Deserialize, Serialize};
@@ -102,7 +102,8 @@ pub struct HttpCache {
 	pub location: PathBuf,
 }
 
-impl mashin_sdk::HttpCache for HttpCache {
+impl mashin_runtime::HttpCache for HttpCache {
+	type SourceFile = SourceFile;
 	fn fetch_cached_path(
 		&self,
 		specifier: &reqwest::Url,
@@ -147,37 +148,8 @@ impl mashin_sdk::HttpCache for HttpCache {
 
 		Ok(cache_filename)
 	}
-}
 
-impl HttpCache {
-	/// Returns a new instance.
-	///
-	/// `location` must be an absolute path.
-	pub fn new(location: &Path) -> Self {
-		assert!(location.is_absolute());
-		Self { location: location.to_owned() }
-	}
-
-	/// Ensures the location of the cache.
-	pub fn ensure_dir_exists(&self, path: &Path) -> io::Result<()> {
-		if path.is_dir() {
-			return Ok(())
-		}
-		fs::create_dir_all(path).map_err(|e| {
-      io::Error::new(
-        e.kind(),
-        format!(
-          "Could not create remote modules cache location: {path:?}\nCheck the permission of the directory."
-        ),
-      )
-    })
-	}
-
-	pub fn get_cache_filename(&self, url: &Url) -> Option<PathBuf> {
-		Some(self.location.join(url_to_filename(url)?))
-	}
-
-	pub fn get(&self, url: &Url) -> Result<(File, HeadersMap, SystemTime)> {
+	fn get(&self, url: &Url) -> Result<(File, HeadersMap, SystemTime)> {
 		let cache_filename = self.location.join(
 			url_to_filename(url).ok_or_else(|| generic_error("Can't convert url to filename."))?,
 		);
@@ -188,16 +160,18 @@ impl HttpCache {
 		Ok((file, metadata.headers, metadata.now))
 	}
 
-	pub fn fetch_cached(
+	fn fetch_cached(
 		&self,
 		specifier: &ModuleSpecifier,
 		redirect_limit: i64,
-	) -> Result<Option<SourceFile>> {
+	) -> Result<Option<Self::SourceFile>> {
 		if redirect_limit < 0 {
 			return Err(custom_error("Http", "Too many redirects."))
 		}
 
-		let (mut source_file, headers, _) = match self.get(specifier) {
+		let http_cache = self.clone();
+
+		let (mut source_file, headers, _) = match http_cache.get(specifier) {
 			Err(err) => {
 				if let Some(err) = err.downcast_ref::<std::io::Error>() {
 					if err.kind() == std::io::ErrorKind::NotFound {
@@ -219,12 +193,12 @@ impl HttpCache {
 		Ok(Some(file))
 	}
 
-	pub fn build_remote_file(
+	fn build_remote_file(
 		&self,
 		specifier: &ModuleSpecifier,
 		bytes: Vec<u8>,
 		headers: &HashMap<String, String>,
-	) -> Result<SourceFile> {
+	) -> Result<Self::SourceFile> {
 		let local = self
 			.get_cache_filename(specifier)
 			.ok_or_else(|| generic_error("Cannot convert specifier to cached filename."))?;
@@ -245,6 +219,35 @@ impl HttpCache {
 			specifier: specifier.clone(),
 			maybe_headers: Some(headers.clone()),
 		})
+	}
+}
+
+impl HttpCache {
+	/// Returns a new instance.
+	///
+	/// `location` must be an absolute path.
+	pub fn new(location: &Path) -> Self {
+		assert!(location.is_absolute());
+		Self { location: location.to_owned() }
+	}
+
+	/// Ensures the location of the cache.
+	fn ensure_dir_exists(&self, path: &Path) -> io::Result<()> {
+		if path.is_dir() {
+			return Ok(())
+		}
+		fs::create_dir_all(path).map_err(|e| {
+      io::Error::new(
+        e.kind(),
+        format!(
+          "Could not create remote modules cache location: {path:?}\nCheck the permission of the directory."
+        ),
+      )
+    })
+	}
+
+	pub fn get_cache_filename(&self, url: &Url) -> Option<PathBuf> {
+		Some(self.location.join(url_to_filename(url)?))
 	}
 }
 

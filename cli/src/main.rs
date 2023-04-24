@@ -17,14 +17,16 @@
 pub(crate) use anyhow::Result;
 use clap::Parser;
 use cli::{Cli, Subcommand};
-use mashin_runtime::colors;
+use console::style;
 use std::env;
+use util::display::write_to_stdout_ignore_sigpipe;
 
 mod cache;
 mod cli;
 mod http_client;
 mod logger;
 mod module_loader;
+mod progress_manager;
 mod util;
 
 const MASHIN: &str = r#"
@@ -44,7 +46,7 @@ pub async fn main() -> Result<(), anyhow::Error> {
 	let cli = Cli::parse();
 
 	logger::init();
-	log::info!("\n\n{}\n", colors::bold(MASHIN));
+	write_to_stdout_ignore_sigpipe(format!("\n\n{}\n", style(MASHIN).bold()).as_bytes())?;
 
 	match cli.subcommand {
 		Subcommand::Run(cmd) => cmd.run(args).await,

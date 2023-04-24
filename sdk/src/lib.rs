@@ -24,7 +24,7 @@ pub use mashin_macro::provider;
 pub use provider_state::ProviderState;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{any::Any, cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc};
+use std::{any::Any, cell::RefCell, fmt::Debug, rc::Rc};
 
 mod build;
 mod deserialize;
@@ -50,7 +50,6 @@ pub mod ext {
 }
 
 pub type ResourceId = u32;
-pub type HeadersMap = HashMap<String, String>;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ResourceArgs {
@@ -179,22 +178,6 @@ pub trait ResourceDefault {
 }
 
 #[async_trait]
-pub trait HttpClient {
-	async fn download_with_headers(&self, url: &reqwest::Url) -> Result<(Vec<u8>, HeadersMap)>;
-	async fn download_with_progress(&self, url: &reqwest::Url) -> Result<(Vec<u8>, HeadersMap)>;
-	fn cache(&self) -> Box<&dyn HttpCache>;
-}
-
-pub trait HttpCache {
-	fn fetch_cached_path(
-		&self,
-		specifier: &reqwest::Url,
-		redirect_limit: i64,
-	) -> Result<Option<PathBuf>>;
-	fn set(&self, url: &reqwest::Url, headers_map: HeadersMap, content: &[u8]) -> Result<PathBuf>;
-}
-
-#[async_trait]
 pub trait Resource: ResourceEq + ResourceSerialize + ResourceDefault {
 	async fn get(&mut self, provider_state: &ProviderState) -> Result<()>;
 	async fn create(&mut self, provider_state: &ProviderState) -> Result<()>;
@@ -220,11 +203,11 @@ impl<R: Serialize> ResourceSerialize for R {
 	}
 }
 
-pub trait Config {}
-
 #[async_trait]
 pub trait ProviderBuilder {
-	async fn build(&mut self) -> Result<()>;
+	async fn build(&mut self) -> Result<()> {
+		Ok(())
+	}
 }
 
 pub trait ProviderDefault {

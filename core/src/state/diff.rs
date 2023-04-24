@@ -15,7 +15,8 @@
 \* ---------------------------------------------------------*/
 
 use super::trim_sensitive::fold_json;
-use crate::{colors, Result};
+use crate::Result;
+use console::style;
 use mashin_sdk::{ResourceDiff, KEY_VALUE};
 use serde_json::Value;
 use std::{collections::HashSet, fmt, ops::Deref};
@@ -170,35 +171,39 @@ impl StateResourceDiff {
 			}
 			log::info!(
 				"   {}     {} {}: {}",
-				colors::green_bold("|"),
-				colors::green_bold("+"),
-				colors::green_bold(self.path().to_string()),
-				colors::green_bold(diff_print)
+				style("|").green().bold(),
+				style("+").green().bold(),
+				style(self.path().to_string()).green().bold(),
+				style(diff_print).green().bold()
 			);
-			return Ok(Some(colors::green_bold(LINE).to_string()))
+			return Ok(Some(style(LINE).green().bold().to_string()))
 		}
 
 		if self.is_update() {
-			let mut diff_new =
-				colors::green_bold(self.lhs().clone().unwrap_or_default().to_string()).to_string();
-			let mut diff_old =
-				colors::red_strike(self.rhs().clone().unwrap_or_default().to_string()).to_string();
+			let mut diff_new = style(self.lhs().clone().unwrap_or_default().to_string())
+				.green()
+				.bold()
+				.to_string();
+			let mut diff_old = style(self.rhs().clone().unwrap_or_default().to_string())
+				.red()
+				.dim()
+				.to_string();
 
 			let whitespace = " ".repeat(self.path().to_string().len());
 			let box_line = format!(
 				"{}{}",
-				colors::cyan_bold("   |     ",),
-				colors::cyan_bold("^".repeat(self.path().to_string().len() + 3),)
+				style("   |     ",).cyan().bold(),
+				style("^".repeat(self.path().to_string().len() + 3),).cyan().bold()
 			);
 
 			if let Some(new_state) = self.lhs() {
 				if new_state.is_object() {
 					diff_new = mashin_sdk::ext::serde_json::to_string_pretty(new_state)?
 						.split('\n')
-						.map(|s| colors::green_bold(s).to_string())
+						.map(|s| style(s).green().bold().to_string())
 						.collect::<Vec<_>>()
 						.join(
-							format!("{}  {}", colors::cyan_bold("\n   |     +"), whitespace)
+							format!("{}  {}", style("\n   |     +").cyan().bold(), whitespace)
 								.as_str(),
 						);
 				}
@@ -208,10 +213,10 @@ impl StateResourceDiff {
 				if old_state.is_object() {
 					diff_old = mashin_sdk::ext::serde_json::to_string_pretty(old_state)?
 						.split('\n')
-						.map(|s| colors::red_strike(s).to_string())
+						.map(|s| style(s).red().dim().to_string())
 						.collect::<Vec<_>>()
 						.join(
-							format!("{}  {}", colors::cyan_bold("\n   |     -"), whitespace)
+							format!("{}  {}", style("\n   |     -").cyan().bold(), whitespace)
 								.as_str(),
 						);
 				}
@@ -219,22 +224,22 @@ impl StateResourceDiff {
 
 			log::info!(
 				"   {}     {} {}: {}",
-				colors::cyan_bold("|"),
-				colors::cyan_bold("-"),
-				colors::cyan_bold(self.path().to_string()),
+				style("|").cyan().bold(),
+				style("-").cyan().bold(),
+				style(self.path().to_string()).cyan().bold(),
 				diff_old
 			);
 			log::info!(
 				"   {}     {} {}  {}",
-				colors::cyan_bold("|"),
-				colors::cyan_bold("+"),
+				style("|").cyan().bold(),
+				style("+").cyan().bold(),
 				whitespace,
 				diff_new
 			);
 
 			log::info!("{}", box_line);
 
-			return Ok(Some(colors::cyan_bold(LINE).to_string()))
+			return Ok(Some(style(LINE).cyan().bold().to_string()))
 		}
 
 		Ok(None)

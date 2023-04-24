@@ -14,47 +14,52 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use console::style;
-use mashin_sdk::CliLogger;
-use std::io::Write;
+use crate::Result;
+use console::Term;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
-pub(crate) fn init() {
-	let logger = env_logger::Builder::from_env(env_logger::Env::default())
-		.filter_module("mashin", log::LevelFilter::Info)
-		.format(|buf, record| {
-			let mut target = record.target().to_string();
-			let is_provider = target.starts_with("mashin::provider");
+#[derive(Clone, Debug, Default)]
+pub struct ProgressManager {
+	pub http_progress: MultiProgress,
+	pub resource_progress: Option<ProgressBar>,
+}
 
-			if let Some(line_no) = record.line() {
-				target.push(':');
-				target.push_str(&line_no.to_string());
-			}
-			if record.level() <= log::Level::Info {
-				// Print ERROR, WARN, INFO and lsp_debug logs as they are
-				if is_provider {
-					writeln!(
-						buf,
-						"[{}]: {}",
-						style(target.replace("mashin::provider::", "provider:")).bold(),
-						record.args()
-					)
-				} else {
-					writeln!(buf, "{}", record.args())
-				}
-			} else {
-				// Add prefix to DEBUG or TRACE logs
-				writeln!(buf, "{} RS - {} - {}", record.level(), target, record.args())
-			}
-		})
-		.build();
-
-	let cli_logger = CliLogger::new(logger);
-	let max_level = cli_logger.filter();
-
-	let r = log::set_boxed_logger(Box::new(cli_logger));
-	if r.is_ok() {
-		log::set_max_level(max_level);
+impl ProgressManager {
+	pub fn new() -> Self {
+		Default::default()
 	}
 
-	r.expect("Could not install logger.");
+	pub fn maybe_finish_resource_progress(&self) {
+		if let Some(resource_progress) = &self.resource_progress {
+			resource_progress.finish_and_clear();
+		}
+	}
+
+	pub fn set_resource_progress(&mut self, len: u64) -> Result<()> {
+		let pb = ProgressBar::new(len);
+		pb.set_style(
+			ProgressStyle::with_template(
+				// note that bar size is fixed unlike cargo which is dynamic
+				// and also the truncation in cargo uses trailers (`...`)
+				if Term::stdout().size().1 > 80 {
+					"{spinner:.green} [{elapsed_precise}] [{bar:57}] {pos}/{len} {wide_msg}"
+				} else {
+					"{spinner:.green} [{elapsed_precise}] [{bar:57}] {pos}/{len}"
+				},
+			)?
+			.progress_chars("#>-"),
+		);
+		self.resource_progress = Some(pb);
+		Ok(())
+	}
+}
+
+impl mashin_runtime::ProgressManager for ProgressManager {
+	fn println(&self, msg: &str) {
+		println!("{msg}");
+	}
+
+	fn progress_bar(&self) -> Option<indicatif::ProgressBar> {
+		self.resource_progress.clone()
+	}
 }

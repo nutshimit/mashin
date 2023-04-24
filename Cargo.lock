@@ -106,12 +106,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b4930d2cb77ce62f89ee5d5289b4ac049559b1c45539271f5ed4fdc7db34545"
 
 [[package]]
-name = "arrayvec"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
-
-[[package]]
 name = "ast_node"
 version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -350,16 +344,6 @@ dependencies = [
  "libc",
  "unicode-width",
  "windows-sys 0.42.0",
-]
-
-[[package]]
-name = "console_static_text"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4be93df536dfbcbd39ff7c129635da089901116b88bfc29ec1acb9b56f8ff35"
-dependencies = [
- "unicode-width",
- "vte",
 ]
 
 [[package]]
@@ -1176,6 +1160,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "indicatif"
+version = "0.17.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cef509aa9bc73864d6756f0d34d35504af3cf0844373afe9b8669a5b8005a729"
+dependencies = [
+ "console",
+ "number_prefix",
+ "portable-atomic",
+ "unicode-width",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1398,14 +1394,14 @@ dependencies = [
  "anyhow",
  "atty",
  "clap",
- "console_static_text",
+ "console",
  "deno_ast",
  "deno_core",
  "deno_fetch",
  "dialoguer",
  "encoding_rs",
  "env_logger",
- "libc",
+ "indicatif",
  "log",
  "mashin_runtime",
  "mashin_sdk",
@@ -1415,7 +1411,6 @@ dependencies = [
  "ring",
  "serde",
  "tokio",
- "winapi",
 ]
 
 [[package]]
@@ -1424,22 +1419,23 @@ version = "0.1.3"
 dependencies = [
  "anyhow",
  "async-trait",
- "atty",
  "base64 0.21.0",
+ "console",
  "deno_core",
  "dlopen",
+ "indicatif",
  "itertools",
  "libffi",
  "log",
  "mashin_sdk",
  "once_cell",
  "quote 1.0.26",
+ "reqwest",
  "rkv",
  "serde",
  "serde_json",
  "sodiumoxide",
  "syn 1.0.109",
- "termcolor",
  "tokio",
  "url",
 ]
@@ -1486,9 +1482,10 @@ dependencies = [
  "anyhow",
  "async-trait",
  "env_logger",
+ "indicatif",
  "log",
  "mashin_macro",
- "reqwest",
+ "parking_lot",
  "serde",
  "serde_json",
  "tokio",
@@ -1574,6 +1571,12 @@ dependencies = [
  "hermit-abi 0.2.6",
  "libc",
 ]
+
+[[package]]
+name = "number_prefix"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
 name = "once_cell"
@@ -1750,6 +1753,12 @@ dependencies = [
  "quote 1.0.26",
  "syn 1.0.109",
 ]
+
+[[package]]
+name = "portable-atomic"
+version = "0.3.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26f6a7b87c2e435a3241addceeeff740ff8b7e76b74c13bf9acb17fa454ea00b"
 
 [[package]]
 name = "ppv-lite86"
@@ -3214,27 +3223,6 @@ name = "vsimd"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
-
-[[package]]
-name = "vte"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1aae21c12ad2ec2d168c236f369c38ff332bc1134f7246350dca641437365045"
-dependencies = [
- "arrayvec",
- "utf8parse",
- "vte_generate_state_changes",
-]
-
-[[package]]
-name = "vte_generate_state_changes"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d257817081c7dffcdbab24b9e62d2def62e2ff7d00b1c20062551e6cccc145ff"
-dependencies = [
- "proc-macro2 1.0.56",
- "quote 1.0.26",
-]
 
 [[package]]
 name = "walkdir"

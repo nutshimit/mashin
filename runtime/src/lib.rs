@@ -14,21 +14,18 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::Result;
 use deno_core::{
-	error::uri_error,
-	futures::{self, FutureExt},
-	include_js_files, resolve_import, resolve_path,
-	serde_json::json,
-	Extension, JsRuntime, ModuleLoader, ModuleSource, ModuleSourceFuture, ModuleSpecifier,
-	ModuleType, OpDecl, ResolutionKind, RuntimeOptions,
+	include_js_files, resolve_path, serde_json::json, Extension, JsRuntime, ModuleLoader,
+	ModuleSpecifier, OpDecl, RuntimeOptions,
 };
 use deno_fetch::FetchPermissions;
 use deno_web::{BlobStore, TimersPermission};
 use deno_websocket::WebSocketPermissions;
-pub use mashin_core::{colors, mashin_dir::MashinDir};
-use mashin_core::{
-	sdk::ResourceAction, BackendState, ExecutedResource, ExecutedResources, MashinEngine,
+use mashin_core::sdk::ResourceAction;
+pub use mashin_core::{
+	mashin_dir::MashinDir, BackendState, Config, ExecutedResource, ExecutedResources, HeadersMap,
+	HttpCache, HttpClient, MashinBuilder, MashinEngine, ProgressManager, RuntimeCommand,
 };
 use std::{
 	cell::RefCell,
@@ -37,7 +34,6 @@ use std::{
 	path::Path,
 	rc::Rc,
 	str::FromStr,
-	sync::Arc,
 };
 
 mod builtin;
@@ -94,10 +90,10 @@ impl WebSocketPermissions for AllowAllPermissions {
 	}
 }
 
-pub struct Runtime {
+pub struct Runtime<T: Config> {
 	runtime: JsRuntime,
 	main_module: String,
-	command: RuntimeCommand,
+	engine: Rc<MashinEngine<T>>,
 	raw_args: Vec<String>,
 }
 
@@ -105,12 +101,7 @@ pub struct RuntimeResult {
 	pub executed_resources: Rc<RefCell<ExecutedResources>>,
 }
 
-pub enum RuntimeCommand {
-	Run,
-	Destroy,
-}
-
-impl Deref for Runtime {
+impl<T: Config> Deref for Runtime<T> {
 	type Target = JsRuntime;
 
 	fn deref(&self) -> &Self::Target {
@@ -118,27 +109,20 @@ impl Deref for Runtime {
 	}
 }
 
-impl DerefMut for Runtime {
+impl<T: Config> DerefMut for Runtime<T> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.runtime
 	}
 }
 
-impl Runtime {
+impl<T: Config> Runtime<T> {
 	pub fn new(
 		main_module: &str,
-		command: RuntimeCommand,
-		raw_args: Vec<String>,
-		executed_resources: Option<Rc<RefCell<ExecutedResources>>>,
-		http_client: Rc<dyn mashin_core::sdk::HttpClient>,
+		mashin_engine: Rc<MashinEngine<T>>,
 		module_loader: Rc<dyn ModuleLoader>,
-		mashin_dir: &MashinDir,
+		raw_args: Vec<String>,
 	) -> Result<Self> {
-		let is_first_run = executed_resources.is_none();
-		let backend_state = BackendState::new(&mashin_dir)?;
-		let isolated_mashin_dir = mashin_dir.clone();
-		let isolated_http_client = http_client.clone();
-
+		let isolated_engine = mashin_engine.clone();
 		let extension = Extension::builder("mashin_core")
 			.esm(include_js_files!(
 				mashin_core dir "js",
@@ -149,16 +133,10 @@ impl Runtime {
 				"98_global_scope.js",
 				"99_main.js",
 			))
-			.ops(stdlib())
+			.ops(stdlib::<T>())
 			.state(move |state| {
 				// fixme: init in cli?
-				let backend = Rc::new(RefCell::new(backend_state));
-				state.put(
-					MashinEngine::new(backend, b"mysuperpassword", executed_resources)
-						.expect("valid engine"),
-				);
-				state.put(isolated_mashin_dir);
-				state.put(isolated_http_client);
+				state.put(isolated_engine);
 				state.put(AllowAllPermissions {});
 			})
 			.build();
@@ -184,29 +162,36 @@ impl Runtime {
 			..Default::default()
 		});
 
-		let mut runtime = Self { command, main_module: main_module.to_string(), runtime, raw_args };
+		let mut runtime =
+			Self { engine: mashin_engine, main_module: main_module.to_string(), runtime, raw_args };
 
 		// bootstrap the engine
-		runtime.bootstrap(is_first_run)?;
+		runtime.bootstrap()?;
 		Ok(runtime)
 	}
 
+	// do a complete dry run to prepare all resources
+	// and mainly count how many we have total
+	pub async fn prepare(&mut self) -> Result<u64> {
+		self.run_main_module().await?;
+		let rc_op_state = self.runtime.op_state();
+		let op_state = rc_op_state.borrow();
+		let engine = op_state.borrow::<Rc<MashinEngine<T>>>();
+		Ok(engine.resources_count())
+	}
+
 	pub async fn run(&mut self) -> Result<RuntimeResult> {
-		match self.command {
-			RuntimeCommand::Run => {
-				self.run_main_module().await?;
-			},
-			RuntimeCommand::Destroy => todo!(),
-		};
+		self.run_main_module().await?;
 
 		let rc_op_state = self.runtime.op_state();
 		let op_state = rc_op_state.borrow();
-		let engine = op_state.borrow::<MashinEngine>();
-		let executed_resources_rc = engine.executed_resources.clone();
-
+		let engine = op_state.borrow::<Rc<MashinEngine<T>>>();
+		let executed_resources_rc = &engine.executed_resources;
 		let all_resources_in_state = engine.state_handler.borrow().resources()?;
 		let mut executed_resources = executed_resources_rc.borrow_mut();
 
+		// add all missing ressource to be deleted
+		// they are available within the state but not in the code
 		for urn in &all_resources_in_state {
 			if !executed_resources.contains_key(urn) {
 				executed_resources.insert(
@@ -224,13 +209,14 @@ impl Runtime {
 	}
 
 	// trigger `bootstrapMainRuntime` in `js/99_main.js`
-	fn bootstrap(&mut self, is_first_run: bool) -> Result<()> {
+	fn bootstrap(&mut self) -> Result<()> {
 		self.runtime.execute_script(
 			"file://__bootstrap.js",
 			format!(
 				r#"globalThis.bootstrap.mainRuntime({})"#,
 				json!({
-					"isFirstRun": is_first_run,
+					// display console.log() only on read
+					"isFirstRun": self.engine.command == RuntimeCommand::Read,
 					// allow parsing env with Deno.args
 					"args": self.raw_args,
 					// allow target with Deno.env
@@ -249,7 +235,9 @@ impl Runtime {
 		} else {
 			resolve_path(&self.main_module, current_dir()?.as_path())?
 		};
-
+		if self.engine.command == RuntimeCommand::Prepare {
+			log::info!("    Fetching dependencies");
+		}
 		let mod_id = self.runtime.load_main_module(&main_module, None).await?;
 		let result_main = self.runtime.mod_evaluate(mod_id);
 		self.runtime.run_event_loop(false).await?;
@@ -257,8 +245,8 @@ impl Runtime {
 	}
 }
 
-fn stdlib() -> Vec<OpDecl> {
+fn stdlib<T: Config>() -> Vec<OpDecl> {
 	let mut ops = vec![];
-	ops.extend(builtin::mashin_core_client::op_decls());
+	ops.extend(builtin::mashin_core_client::op_decls::<T>());
 	ops
 }
