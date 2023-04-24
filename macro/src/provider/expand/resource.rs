@@ -129,7 +129,7 @@ pub fn expand_resources(def: &mut Def) -> proc_macro2::TokenStream {
         let docs = &resource.docs;
         quote! {
             #vis use #isolated_ident::#resource_ident;
-            
+
             mod #isolated_ident {
                 use super::*;
 
