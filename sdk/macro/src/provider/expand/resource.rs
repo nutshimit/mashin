@@ -14,47 +14,22 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use super::parse::Def;
-use quote::ToTokens;
+use crate::provider::parse::Def;
+use syn::Item;
 
-mod builder;
-mod config;
-mod helper;
-mod provider;
-mod resource;
-mod resource_config;
-mod resource_impl;
-mod ts;
+pub fn expand_resources(def: &mut Def) -> proc_macro2::TokenStream {
+	let _item = {
+		let item =
+			&mut def.item.content.as_mut().expect("Checked by def parser").1[def.resources.index];
+		let item_cloned = item.clone();
+		*item = Item::Verbatim(quote::quote!());
 
-pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
-	let provider = provider::expand_provider(&mut def);
-	let config = config::expand_config(&mut def);
-	let builder = builder::expand_builder(&mut def);
-	let resources = resource::expand_resources(&mut def);
-	let resources_impl = resource_impl::expand_resource_impl(&mut def);
-	let resources_config = resource_config::expand_resource_config(&mut def);
-	let extra_ts = ts::expand_ts(&mut def);
+		if let syn::Item::Enum(item) = item_cloned {
+			item
+		} else {
+			unreachable!("Checked by config parser")
+		}
+	};
 
-	ts::export_ts(&mut def);
-
-	let new_items = quote::quote!(
-		static __MASHIN_LOG_INIT: ::std::sync::Once = std::sync::Once::new();
-
-		#provider
-		#config
-		#builder
-		#resources
-		#resources_impl
-		#resources_config
-		#extra_ts
-	);
-
-	def.item
-		.content
-		.as_mut()
-		.expect("This is checked by parsing")
-		.1
-		.push(syn::Item::Verbatim(new_items));
-
-	def.item.into_token_stream()
+	quote::quote! {}
 }

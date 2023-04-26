@@ -14,14 +14,18 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use std::path::Path;
+use proc_macro::TokenStream;
 
-pub fn build() {
-	if let Ok(target) = std::env::var("CARGO_MANIFEST_DIR") {
-		println!("cargo:rustc-env=TARGET={}", target);
-		println!(
-			"cargo:rerun-if-changed={}",
-			Path::new(&target).join("bindings.json").to_str().expect("valid path")
-		);
-	}
+mod provider;
+mod resource;
+mod utils;
+
+#[proc_macro_attribute]
+pub fn provider(attr: TokenStream, item: TokenStream) -> TokenStream {
+	provider::provider(attr, item)
+}
+
+#[proc_macro_attribute]
+pub fn resource(attr: TokenStream, item: TokenStream) -> TokenStream {
+	resource::resource(attr, item)
 }

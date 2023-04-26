@@ -1,0 +1,16 @@
+[package]
+name = "mashin_bindgen"
+version = "0.1.1"
+readme = "README.md"
+description = "CLI to generate bindings"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+mashin_primitives.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+tokio.workspace = true
+clap.workspace = true
