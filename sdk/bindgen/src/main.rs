@@ -19,7 +19,7 @@ pub async fn main() -> Result<()> {
 			let out_path =
 				ts.out.unwrap_or(current_dir()?.to_str().unwrap_or_default().to_string());
 
-			write_mod(&out_path, output)?;
+			write_mod(out_path, output)?;
 		},
 	}
 

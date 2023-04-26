@@ -27,6 +27,6 @@ where
 		.write(true)
 		.create(true)
 		.open(path.join("mod.ts"))?;
-	file.write_all(&content.as_bytes())?;
+	file.write_all(content.as_bytes())?;
 	Ok(())
 }

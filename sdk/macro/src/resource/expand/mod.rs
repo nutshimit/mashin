@@ -19,7 +19,7 @@ use crate::utils::ts::{get_glue, metafile, process_struct};
 use inflector::Inflector;
 use mashin_primitives::InternalMashinType;
 use quote::ToTokens;
-use serde_json;
+
 use std::{env, io::Write};
 
 mod config;
@@ -37,7 +37,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 		&mut glue,
 		&def.item.content.as_ref().expect("pre-checked").1[def.resource.index],
 		InternalMashinType::Resource(def.item.ident.to_string()),
-		Some(format!("{resource_name}")),
+		Some(resource_name.to_string()),
 	)
 	.expect("valid ts");
 
