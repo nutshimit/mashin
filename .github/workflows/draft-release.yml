@@ -61,7 +61,7 @@ jobs:
           # apple-notary-user: ${{ secrets.APPLE_NOTARY_USER }}
           # apple-notary-password: ${{ secrets.APPLE_NOTARY_PASSWORD }}
           apple-product-id: land.mashin.runtime
-          options: --options runtime --entitlements scripts/macos/entitlements.xml
+          options: --options runtime --entitlements ./scripts/macos/entitlements.xml
 
       - name: Zip (windows)
         if: matrix.os == 'windows-latest'
