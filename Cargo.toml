@@ -58,5 +58,5 @@ parking_lot = "0.12.1"
 mashin_core = { version = "0.1.5", path = "./core" }
 mashin_runtime = { version = "0.1.5", path = "./runtime" }
 mashin_sdk = { version = "0.1.9", path = "./sdk" }
-mashin_macro = { version = "0.1.7", path = "./sdk/macro" }
+mashin_macro = { version = "0.1.8", path = "./sdk/macro" }
 mashin_primitives = { version = "0.1.0", path = "./sdk/primitives" }
