@@ -1,6 +1,6 @@
 [package]
 name = "mashin_sdk"
-version = "0.1.4"
+version = "0.1.7"
 readme = "README.md"
 description = "SDK for writing mashin resources"
 authors.workspace = true
