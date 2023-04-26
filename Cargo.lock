@@ -1391,7 +1391,7 @@ dependencies = [
 
 [[package]]
 name = "mashin_core"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1439,7 +1439,7 @@ dependencies = [
 
 [[package]]
 name = "mashin_runtime"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "deno_console",
