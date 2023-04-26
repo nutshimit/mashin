@@ -20,7 +20,7 @@ use async_trait::async_trait;
 pub use build::build;
 pub use deserialize::deserialize_state_field;
 pub use logger::CliLogger;
-pub use mashin_macro::provider;
+pub use mashin_macro::{provider, resource};
 use parking_lot::Mutex;
 pub use provider_state::ProviderState;
 use serde::{Deserialize, Serialize};
@@ -30,6 +30,7 @@ use std::{any::Any, cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
 mod build;
 mod deserialize;
 mod logger;
+mod provider;
 mod provider_state;
 mod urn;
 

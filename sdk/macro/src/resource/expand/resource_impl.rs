@@ -14,14 +14,16 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use std::path::Path;
+use crate::resource::parse::Def;
 
-pub fn build() {
-	if let Ok(target) = std::env::var("CARGO_MANIFEST_DIR") {
-		println!("cargo:rustc-env=TARGET={}", target);
-		println!(
-			"cargo:rerun-if-changed={}",
-			Path::new(&target).join("bindings.json").to_str().expect("valid path")
-		);
+pub fn expand_resource_impl(def: &mut Def) -> proc_macro2::TokenStream {
+	let item =
+		&mut def.item.content.as_mut().expect("Checked by def parser").1[def.resource_calls.index];
+	if let syn::Item::Impl(item) = item {
+		item.attrs.push(syn::parse_quote!(
+			#[::mashin_sdk::ext::async_trait::async_trait]
+		));
 	}
+
+	quote::quote! {}
 }

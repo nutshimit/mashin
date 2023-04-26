@@ -14,14 +14,39 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use std::path::Path;
+use syn::spanned::Spanned;
 
-pub fn build() {
-	if let Ok(target) = std::env::var("CARGO_MANIFEST_DIR") {
-		println!("cargo:rustc-env=TARGET={}", target);
-		println!(
-			"cargo:rerun-if-changed={}",
-			Path::new(&target).join("bindings.json").to_str().expect("valid path")
-		);
+use super::get_doc_literals;
+
+#[derive(Clone)]
+pub struct ResourceDef {
+	pub name: String,
+	pub index: usize,
+	pub attr_span: proc_macro2::Span,
+	pub ident: syn::Ident,
+	pub docs: Vec<syn::Expr>,
+}
+
+impl ResourceDef {
+	pub fn try_from(
+		attr_span: proc_macro2::Span,
+		index: usize,
+		item: &mut syn::Item,
+	) -> syn::Result<Self> {
+		let item = if let syn::Item::Enum(item) = item {
+			item
+		} else {
+			let msg = "Invalid provider::resource, expected struct";
+			return Err(syn::Error::new(item.span(), msg))
+		};
+
+		let ident = item.ident.clone();
+		if !matches!(item.vis, syn::Visibility::Public(_)) {
+			let msg = "Invalid provider::resource, struct must be public";
+			return Err(syn::Error::new(item.span(), msg))
+		}
+		let docs = get_doc_literals(&item.attrs);
+
+		Ok(Self { name: "".into(), attr_span, index, ident, docs })
 	}
 }

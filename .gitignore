@@ -4,3 +4,4 @@ mashin_core/node_modules*
 **/gen/
 .mashin
 mod.lock
+.DS_Store

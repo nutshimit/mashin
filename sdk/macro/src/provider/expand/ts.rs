@@ -13,15 +13,22 @@
  *   see LICENSE for license details.                       *
  *                                                          *
 \* ---------------------------------------------------------*/
+use super::Def;
 
-use std::path::Path;
+pub fn expand_ts(def: &mut Def) -> proc_macro2::TokenStream {
+	for item in def.extra_ts.iter() {
+		let item = &mut def.item.content.as_mut().expect("Checked by def parser").1[item.index];
 
-pub fn build() {
-	if let Ok(target) = std::env::var("CARGO_MANIFEST_DIR") {
-		println!("cargo:rustc-env=TARGET={}", target);
-		println!(
-			"cargo:rerun-if-changed={}",
-			Path::new(&target).join("bindings.json").to_str().expect("valid path")
-		);
+		match item {
+			syn::Item::Enum(item) => item.attrs.push(syn::parse_quote!(
+				#[derive(Debug, serde::Deserialize, serde::Serialize)]
+			)),
+			syn::Item::Struct(item) => item.attrs.push(syn::parse_quote!(
+				#[derive(Debug, serde::Deserialize, serde::Serialize)]
+			)),
+			_ => unimplemented!(),
+		};
 	}
+
+	quote::quote! {}
 }

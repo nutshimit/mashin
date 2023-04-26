@@ -1379,6 +1379,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mashin_bindgen"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "mashin_primitives",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "mashin_core"
 version = "0.1.3"
 dependencies = [
@@ -1410,11 +1421,20 @@ name = "mashin_macro"
 version = "0.1.4"
 dependencies = [
  "Inflector",
+ "mashin_primitives",
  "proc-macro2 1.0.56",
  "quote 1.0.26",
  "serde",
  "serde_json",
  "syn 2.0.15",
+]
+
+[[package]]
+name = "mashin_primitives"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

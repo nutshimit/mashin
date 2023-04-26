@@ -14,31 +14,107 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use crate::provider::parse::{Def, InternalMashinType, TsType};
 use inflector::Inflector;
-use std::collections::HashMap;
-use syn::{ext::IdentExt, Attribute, Fields, Meta};
+use mashin_primitives::{Glue, InternalMashinType, TsType};
+use std::{
+	collections::HashMap,
+	env,
+	fs::{self, OpenOptions},
+	io::Read,
+	path::Path,
+};
+use syn::{ext::IdentExt, spanned::Spanned, Attribute, Fields, Meta};
 
-pub fn process_struct(
-	def: &mut Def,
-	key: usize,
+pub fn metafile_path() -> String {
+	match env::var("TARGET") {
+		Ok(out_dir) => Path::new(&out_dir)
+			.join("bindings.json")
+			.into_os_string()
+			.into_string()
+			.unwrap(),
+		Err(_e) => String::from("bindings.json"),
+	}
+}
+
+pub fn metafile() -> fs::File {
+	OpenOptions::new()
+		.write(true)
+		.truncate(true)
+		.create(true)
+		.open(metafile_path().as_str())
+		.expect("Error opening meta file")
+}
+
+pub fn get_glue() -> Glue {
+	match OpenOptions::new().read(true).open(metafile_path().as_str()) {
+		Ok(mut fd) => {
+			let mut meta = String::new();
+			fd.read_to_string(&mut meta).expect("Error reading meta file");
+			serde_json::from_str(&meta).unwrap_or_default()
+		},
+		Err(_) => Glue {
+			name: env::var("CARGO_PKG_NAME").unwrap_or_default(),
+			repository: env::var("CARGO_PKG_REPOSITORY").unwrap_or_default(),
+			version: env::var("CARGO_PKG_VERSION").unwrap_or_default(),
+			..Default::default()
+		},
+	}
+}
+
+#[derive(Clone)]
+pub struct TsDef {
+	pub index: usize,
+	pub attr_span: proc_macro2::Span,
+}
+
+impl TsDef {
+	pub fn try_from(
+		attr_span: proc_macro2::Span,
+		index: usize,
+		item: &mut syn::Item,
+	) -> syn::Result<Self> {
+		let _item = if let syn::Item::Struct(item) = item {
+			item
+		} else {
+			let msg = "Invalid mashin::ts, expected struct";
+			return Err(syn::Error::new(item.span(), msg))
+		};
+
+		Ok(Self { index, attr_span })
+	}
+}
+
+pub(crate) fn process_struct(
+	metadata: &mut Glue,
+	item: &syn::Item,
 	mashin_ty: InternalMashinType,
+	overwrite_type_name: Option<String>,
 ) -> Result<(), String> {
-	let input = def.item.content.clone().expect("Checked by def parser").1[key].clone();
-
-	match &input {
+	match item {
 		syn::Item::Struct(syn::ItemStruct {
 			ident, attrs, fields: Fields::Named(fields), ..
 		}) => {
 			let fields = &fields.named;
 
-			let name = ident;
 			let mut fmap = HashMap::new();
 			let mut typescript: Vec<String> = vec![];
 
 			//let serde_attrs = get_serde_attrs(attrs);
 
 			for field in fields.iter() {
+				let mut should_skip = false;
+				for attribute in field.attrs.clone() {
+					if let Meta::Path(path) = attribute.meta {
+						if path.is_ident("sensitive") {
+							should_skip = true
+						}
+					}
+				}
+
+				if should_skip {
+					continue
+				}
+
 				let mut ident = field
 					.ident
 					.as_ref()
@@ -53,6 +129,15 @@ pub fn process_struct(
 						let ty = segment.ident.to_string();
 						fmap.insert(ident.clone(), ty);
 					},
+					syn::Type::Group(ref ty) => match *ty.elem {
+						syn::Type::Path(ref ty) => {
+							let segment = &ty.path.segments.first().unwrap();
+							let ty = segment.ident.to_string();
+							fmap.insert(ident.clone(), ty);
+						},
+						_ => unimplemented!(),
+					},
+
 					syn::Type::Reference(ref ty) => {
 						assert!(ty.mutability.is_none());
 						assert!(ty.lifetime.is_some());
@@ -65,7 +150,7 @@ pub fn process_struct(
 							_ => unimplemented!(),
 						}
 					},
-					_ => unimplemented!(),
+					_ => unimplemented!("{:?}", field.ty),
 				};
 
 				// force camelcase on all fields
@@ -84,12 +169,12 @@ pub fn process_struct(
 			}
 
 			let doc_str = get_docs(attrs);
-
-			def.type_defs.insert(
-				name.to_string(),
+			let name = overwrite_type_name.unwrap_or(ident.to_string());
+			metadata.type_defs.insert(
+				name.clone(),
 				TsType {
 					doc: doc_str,
-					name: name.to_string(),
+					name,
 					typescript: typescript.join("\n"),
 					mashin_ty,
 					is_enum: false,
@@ -159,7 +244,7 @@ pub fn process_struct(
 
 			let doc_str = get_docs(attrs);
 
-			def.type_defs.insert(
+			metadata.type_defs.insert(
 				name.to_string(),
 				TsType {
 					doc: doc_str,
@@ -180,6 +265,7 @@ fn types_to_ts(ty: &syn::Type) -> String {
 		syn::Type::Array(_) => String::from("any"),
 		syn::Type::Ptr(_) => String::from("any"),
 		syn::Type::Reference(ref ty) => types_to_ts(&ty.elem),
+		syn::Type::Group(ref ty) => types_to_ts(&ty.elem),
 		syn::Type::Path(ref ty) => {
 			// std::alloc::Vec => Vec
 			let segment = &ty.path.segments.last().unwrap();
@@ -214,7 +300,7 @@ fn types_to_ts(ty: &syn::Type) -> String {
 					},
 			}
 		},
-		_ => unimplemented!(),
+		_ => unimplemented!("{:?}", ty),
 	}
 }
 

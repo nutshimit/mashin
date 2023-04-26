@@ -21,12 +21,23 @@ use std::env;
 use syn::Item;
 
 pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
+	let mod_ident = &def.item.ident;
 	let provider_item = {
 		let provider = &def.provider;
 		let item = &mut def.item.content.as_mut().expect("Checked by def parser").1[provider.index];
 		let item_cloned = item.clone();
 		*item = Item::Verbatim(quote::quote!());
 		if let syn::Item::Struct(item) = item_cloned {
+			item
+		} else {
+			unreachable!("Checked by config parser")
+		}
+	};
+
+	let resource_item = {
+		let resource = &def.resources;
+		let item = &mut def.item.content.as_mut().expect("Checked by def parser").1[resource.index];
+		if let syn::Item::Enum(item) = item {
 			item
 		} else {
 			unreachable!("Checked by config parser")
@@ -44,13 +55,11 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 		Err(_e) => env!("CARGO_PKG_NAME").to_string(),
 	};
 
-	let provider_target = format!("mashin::provider::{}", provider_name);
-
-	let resources_map = def.resources.iter().map(|resource| {
-		let name = resource.name.clone();
+	let resources_map = resource_item.variants.iter().map(|resource| {
+		let name = &resource.ident.to_string();
 		let resource = &resource.ident;
 		quote::quote! {
-			#name => Ok(#resource::from_current_state(
+			#name => Ok(#resource::Resource::from_current_state(
 				name,
 				&urn.to_string(),
 				state.clone(),
@@ -61,15 +70,6 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 	let docs = &def.provider.docs;
 
 	quote::quote_spanned! { def.provider.attr_span =>
-		macro_rules! log {
-			($level:tt,  $patter:expr $(, $values:expr)* $(,)?) => {
-				::log::$level!(
-					target: #provider_target,
-					$patter  $(, $values)*
-				)
-			};
-		}
-		pub(super) use log;
 		#vis use #isolated_ident::#ident;
 
 		mod #isolated_ident {
@@ -105,8 +105,8 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 					state: &::std::rc::Rc<::std::cell::RefCell<::mashin_sdk::ext::serde_json::Value>>,
 				) -> ::mashin_sdk::Result<::std::rc::Rc<::std::cell::RefCell<dyn ::mashin_sdk::Resource>>> {
 					let raw_urn = urn.nss().split(':').collect::<Vec<_>>()[1..].join(":");
-					// expect; s3:bucket
 					let module_urn = raw_urn.to_lowercase();
+
 					// resource name
 					let name = urn
 						.q_component()
@@ -120,18 +120,18 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 
 			impl mashin_sdk::Provider for #ident {}
-		}
 
-		#[cfg(test)]
-		mod __provider {
-			use super::*;
-			use ::mashin_sdk::ext::tokio;
-			use ::mashin_sdk::ProviderBuilder;
+			#[cfg(test)]
+			mod #mod_ident {
+				use super::*;
+				use ::mashin_sdk::ext::tokio;
+				use ::mashin_sdk::ProviderBuilder;
 
-			#[tokio::test]
-			async fn build_successfully() -> Result<()> {
-				let mut provider = #ident::default();
-				provider.build().await
+				#[tokio::test]
+				async fn build_successfully() -> Result<()> {
+					let mut provider = #ident::default();
+					provider.build().await
+				}
 			}
 		}
 
