@@ -20,11 +20,10 @@ pub fn generate_ts(glue: &Glue) -> String {
 					ty.doc, ty.name, ty.typescript
 				)
 			},
-			InternalMashinType::Resource(_resource) => {
+			InternalMashinType::Resource(resource_name) => {
 				let name = &ty.name;
 				let output_name = format!("{}Outputs", name);
 				let config_ident = format!("{}Config", name);
-				let resource_name = name.to_lowercase();
 
 				let resource_class = format!(
 					r#"

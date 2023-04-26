@@ -36,7 +36,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	process_struct(
 		&mut glue,
 		&def.item.content.as_ref().expect("pre-checked").1[def.resource.index],
-		InternalMashinType::Resource(def.resource.name.clone()),
+		InternalMashinType::Resource(def.item.ident.to_string()),
 		Some(format!("{resource_name}")),
 	)
 	.expect("valid ts");
