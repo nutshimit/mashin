@@ -150,7 +150,7 @@ pub(crate) fn process_struct(
 							_ => unimplemented!(),
 						}
 					},
-					_ => unimplemented!("{:?}", field.ty),
+					_ => unimplemented!(),
 				};
 
 				// force camelcase on all fields
@@ -300,7 +300,7 @@ fn types_to_ts(ty: &syn::Type) -> String {
 					},
 			}
 		},
-		_ => unimplemented!("{:?}", ty),
+		_ => unimplemented!(),
 	}
 }
 
