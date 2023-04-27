@@ -9,8 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
-permissions:
-  contents: write
+permissions: write-all
 
 jobs:
   build:
