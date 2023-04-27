@@ -1,6 +1,6 @@
 [workspace.package]
 edition = "2021"
-license = "MIT"
+license = "GPL-3.0 AND Apache-2.0"
 authors = ["Nutshimit Team <hey@mashin.land>"]
 repository = "https://github.com/nutshimit/mashin"
 
@@ -57,6 +57,6 @@ parking_lot = "0.12.1"
 # mashin
 mashin_core = { version = "0.1.5", path = "./core" }
 mashin_runtime = { version = "0.1.5", path = "./runtime" }
-mashin_sdk = { version = "0.1.9", path = "./sdk" }
-mashin_macro = { version = "0.1.8", path = "./sdk/macro" }
+mashin_sdk = { version = "0.1.10", path = "./sdk" }
+mashin_macro = { version = "0.1.9", path = "./sdk/macro" }
 mashin_primitives = { version = "0.1.0", path = "./sdk/primitives" }

@@ -10,7 +10,7 @@
  * -------------------------------------------------------- *
  *                                                          *
  *   This file is dual-licensed as Apache-2.0 or GPL-3.0.   *
- *   see LICENSE for license details.                       *
+ *   see LICENSE-* for license details.                     *
  *                                                          *
 \* ---------------------------------------------------------*/
 
@@ -19,6 +19,30 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, str::FromStr};
 
+/// URNs (Uniform Resource Name) are used in Mashin to uniquely identify providers and resources
+/// within the system. They serve as the primary means of routing and referencing between different
+/// components in the infrastructure.
+///
+/// A URN consists of two parts: the provider URN and the resource URN. The provider URN uniquely
+/// identifies a specific provider, while the resource URN is a combination of the provider URN
+/// and the resource type. This hierarchical structure allows the engine to easily route and manage
+/// resources based on their providers.
+///
+/// The naming of providers and resources is crucial in Mashin, as it directly affects the URN generation
+/// and the overall system organization. It is essential to choose meaningful and unique names for both
+/// providers and resources to ensure the correct routing and management of infrastructure components.
+///
+/// ### Example:
+/// Suppose we have a provider named example_provider and a resource type named example_resource. The URNs
+/// for this provider and resource would be as follows:
+///
+/// - Provider URN:        `urn:provider:example_provider`
+/// - Resource URN:        `urn:provider:example_provider:example_resource`
+/// - Named Resource URN:  `urn:provider:example_provider:example_resource?=resource_name`
+///
+/// The Mashin engine uses these URNs to determine the appropriate provider and resource instances to manage
+/// and route requests, ensuring that the infrastructure components are correctly handled.
+///
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Urn(urn::Urn);
 
