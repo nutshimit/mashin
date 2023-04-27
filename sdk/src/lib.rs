@@ -50,20 +50,20 @@
 //! # Example
 //! ```no_run
 //! mashin_sdk::construct_provider!(
-//! 	test_provider,
-//! 	resources = [my_resource],
+//!   test_provider,
+//!   resources = [my_resource],
 //! );
 //!
 //! #[mashin_sdk::resource]
 //! pub mod my_resource {
-//! 	#[mashin::config]
-//! 	pub struct Config {}
+//!   #[mashin::config]
+//!   pub struct Config {}
 //!
-//! 	#[mashin::resource]
-//! 	pub struct Resource {}
+//!   #[mashin::resource]
+//!   pub struct Resource {}
 //!
-//! 	#[mashin::calls]
-//! 	impl mashin_sdk::Resource for Resource { ... }
+//!   #[mashin::calls]
+//!   impl mashin_sdk::Resource for Resource { ... }
 //! }
 
 pub use crate::urn::Urn;

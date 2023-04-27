@@ -36,9 +36,9 @@ use std::{cmp::Ordering, str::FromStr};
 /// Suppose we have a provider named example_provider and a resource type named example_resource. The URNs
 /// for this provider and resource would be as follows:
 ///
-/// - Provider URN: 			`urn:provider:example_provider`
-/// - Resource URN: 			`urn:provider:example_provider:example_resource`
-/// - Named Resource URN: 	`urn:provider:example_provider:example_resource?=resource_name`
+/// - Provider URN:        `urn:provider:example_provider`
+/// - Resource URN:        `urn:provider:example_provider:example_resource`
+/// - Named Resource URN:  `urn:provider:example_provider:example_resource?=resource_name`
 ///
 /// The Mashin engine uses these URNs to determine the appropriate provider and resource instances to manage
 /// and route requests, ensuring that the infrastructure components are correctly handled.
