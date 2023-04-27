@@ -19,6 +19,35 @@ use std::{
 	collections::BTreeMap,
 };
 
+/// `ProviderState` is a storage container for provider-specific data that can be shared between
+/// provider and resource instances. It allows providers to store and access data such as API
+/// clients or other shared information.
+///
+/// The implementation is inspired by and based on the `GothamState` from the Deno project.
+/// See <https://github.com/denoland/deno/blob/main/core/gotham_state.rs> for the original code.
+///
+/// `ProviderState` stores data in a type-safe manner using the `TypeId` of the stored value.
+/// It supports storing one value for each type, and provides methods for inserting, borrowing,
+/// borrowing mutably, and taking ownership of values.
+///
+/// # Examples
+///
+/// ```no_run
+/// use mashin_sdk::ProviderState;
+///
+/// struct ApiClient {
+///     // ...
+/// }
+///
+/// let mut state = ProviderState::default();
+/// state.put(ApiClient { /* ... */ });
+///
+/// // Accessing the stored ApiClient instance
+/// let api_client: &ApiClient = state.borrow();
+/// ```
+///
+/// In this example, an `ApiClient` instance is stored in a `ProviderState` and later borrowed for use.
+///
 #[derive(Debug, Default)]
 pub struct ProviderState {
 	data: BTreeMap<TypeId, Box<dyn Any + Send + Sync>>,
