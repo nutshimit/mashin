@@ -1,6 +1,6 @@
 [workspace.package]
 edition = "2021"
-license = "MIT"
+license = "GPL-3.0 AND Apache-2.0"
 authors = ["Nutshimit Team <hey@mashin.land>"]
 repository = "https://github.com/nutshimit/mashin"
 
