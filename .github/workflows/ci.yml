@@ -1,5 +1,8 @@
 name: ci
 
+permissions:
+  contents: write
+
 on:
   push:
     branches:
@@ -59,5 +62,5 @@ jobs:
       - uses: actions-rs/clippy-check@v1
         with:
           toolchain: nightly
+          token: ${{ secrets.GITHUB_TOKEN }}
           args: --all-targets -- -D warnings
-          token: ${{ secrets.GH_TOKEN }}
