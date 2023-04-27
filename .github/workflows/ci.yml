@@ -1,7 +1,6 @@
 name: ci
 
-permissions:
-  contents: write
+permissions: write-all
 
 on:
   push:
