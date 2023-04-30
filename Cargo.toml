@@ -48,7 +48,7 @@ quote = "1.0.26"
 base64 = "0.21.0"
 itertools = "0.10"
 sodiumoxide = "0.2.7"
-clap = { version = "4.2.1", features = ["derive"] }
+clap = { version = "4.2.5", features = ["derive"] }
 dialoguer = "0.10.4"
 indicatif = "0.17.3"
 console = "0.15.5"
