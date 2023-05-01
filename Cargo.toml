@@ -17,7 +17,7 @@ members = [
 ]
 
 [workspace.dependencies]
-anyhow = "1.0.66"
+anyhow = "1.0.71"
 thiserror = "1.0.37"
 tokio = { version = "=1.25.0", features = ["full"] }
 deno_ast = { version = "=0.25.0", features = ["transpiling"] }
