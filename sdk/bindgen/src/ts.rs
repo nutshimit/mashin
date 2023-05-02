@@ -13,9 +13,27 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
+use anyhow::Result;
 use mashin_primitives::{Glue, InternalMashinType};
+use serde::Deserialize;
 
-pub fn generate_ts(glue: &Glue) -> String {
+#[derive(Deserialize)]
+struct Version {
+	latest: String,
+	#[allow(dead_code)]
+	availables: Vec<String>,
+}
+
+pub async fn generate_ts(glue: &Glue) -> Result<String> {
+	// grab latest SDK version
+	let latest_sdk = reqwest::Client::new()
+		.get("https://mashin.run/std.json")
+		.send()
+		.await?
+		.json::<Version>()
+		.await?
+		.latest;
+
 	let mut provider_config = None;
 	let output = glue
 		.type_defs
@@ -94,10 +112,9 @@ T
 *   Do not edit manually.                                  *
 *                                                          *
 \* ---------------------------------------------------------*/
-
-import * as resource from "https://mashin.land/sdk/resource.ts";
-import {{ Inputs, Outputs }} from "https://mashin.land/sdk/output.ts";
-import {{ getFileName }} from "https://mashin.land/sdk/download.ts";
+import * as resource from "https://mashin.run/std@{latest_sdk}/sdk/resource.ts";
+import {{ Inputs, Outputs }} from "https://mashin.run/std@{latest_sdk}/sdk/output.ts";
+import {{ getFileName }} from "https://mashin.run/std@{latest_sdk}/sdk/download.ts";
 
 export const VERSION = "{crate_version}";
 const LOCAL_PATH = Deno.env.get("LOCAL_PLUGIN")
@@ -125,5 +142,5 @@ export class Provider extends resource.Provider {{
 "#
 	);
 
-	format!("{header}\n{output}\n{provider}")
+	Ok(format!("{header}\n{output}\n{provider}"))
 }
