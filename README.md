@@ -1,5 +1,4 @@
-[![GPLv3 license](https://img.shields.io/badge/license-GPLv3-blue.svg)](./LICENSE-GPL)
-[![Apache 2.0 license](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE-APACHE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/nutshimit/mashin?label=mashin)](https://github.com/nutshimit/mashin/releases/latest)
 [![Latest crates.io](https://img.shields.io/crates/v/mashin_sdk?label=sdk)](https://crates.io/crates/mashin_sdk)
 # Mashin
@@ -43,8 +42,10 @@ Then, clone the repository and build the project using the following commands:
 cargo build --release
 ```
 
-## About us
+## Contributing
 
-Nutshimit is an innovative software company specializing in Infrastructure as Code (IaC) solutions. Our flagship product, Mashin, empowers developers to streamline infrastructure management with a secure, user-friendly, and efficient scripting engine. Built on top of Deno and Rust, Mashin combines the power of TypeScript with the flexibility and safety of a sandboxed environment. 
+Mashin is a thriving open-source project that seeks to empower developers and DevOps professionals by providing a robust infrastructure as code (IaC) solution. We believe that the best way to create a truly exceptional tool is by fostering an inclusive, collaborative community.
 
-Join us as we revolutionize the way developers create and manage cloud infrastructure.
+We welcome contributors from all backgrounds, regardless of experience, to help us improve and expand Mashin. Whether you're a Rust developer, a DevOps expert, or simply someone with innovative ideas and suggestions, your contributions are highly valued.
+
+To contribute, please read our [contributing instructions](https://docs.mashin.land/docs/engage).
