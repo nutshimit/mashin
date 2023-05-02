@@ -15,7 +15,7 @@ pub async fn main() -> Result<()> {
 	match cli.subcommand {
 		cli::Subcommand::Ts(ts) => {
 			let glue = glue::get_glue(ts.bindings)?;
-			let output = ts::generate_ts(&glue);
+			let output = ts::generate_ts(&glue).await?;
 			let out_path =
 				ts.out.unwrap_or(current_dir()?.to_str().unwrap_or_default().to_string());
 
