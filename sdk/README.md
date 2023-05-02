@@ -1,5 +1,4 @@
-[![GPLv3 license](https://img.shields.io/badge/license-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Apache 2.0 license](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Docs](https://img.shields.io/docsrs/mashin_sdk)](https://docs.rs/mashin_sdk)
 [![Latest crates.io](https://img.shields.io/crates/v/mashin_sdk)](https://crates.io/crates/mashin_sdk)
 
