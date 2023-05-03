@@ -1,6 +1,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Latest release](https://img.shields.io/github/v/release/nutshimit/mashin?label=mashin)](https://github.com/nutshimit/mashin/releases/latest)
 [![Latest crates.io](https://img.shields.io/crates/v/mashin_sdk?label=sdk)](https://crates.io/crates/mashin_sdk)
+[![post-release](https://github.com/nutshimit/mashin/actions/workflows/post-release.yml/badge.svg)](https://github.com/nutshimit/mashin/actions/workflows/post-release.yml)
 # Mashin
 
 Mashin is an infrastructure-as-code (IaC) engine that focuses on managing resources and providers. It enables users to define, provision, and manage infrastructure components in a reliable and efficient manner. Mashin is designed with simplicity and extensibility in mind, allowing developers to create custom providers and resources that can be utilized by operations teams to deploy infrastructure.
