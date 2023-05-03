@@ -68,8 +68,6 @@ pub fn expand_provider(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let docs = &def.provider.docs;
 
-	println!("docs {:?}", docs);
-
 	quote::quote_spanned! { def.provider.attr_span =>
 		#vis use #isolated_ident::#ident;
 
