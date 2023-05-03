@@ -42,4 +42,7 @@ impl MashinDir {
 	pub fn state_folder_path(&self) -> PathBuf {
 		self.root.join("state")
 	}
+	pub fn upgrade_check_file_path(&self) -> PathBuf {
+		self.root.join("upgrade")
+	}
 }

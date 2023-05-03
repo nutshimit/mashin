@@ -29,6 +29,7 @@ deno_url = "=0.95.0"
 deno_websocket = "=0.100.0"
 deno_doc = "0.62.0"
 deno_graph = "0.48.1"
+deno_semver = "0.2.2"
 
 dlopen = "0.1.8"
 serde = { version = "1.0.160", features = ["derive", "rc"] }
@@ -54,11 +55,16 @@ dialoguer = "0.10.4"
 indicatif = "0.17.3"
 console = "0.15.5"
 parking_lot = "0.12.1"
-futures = "0.3.26"
+chrono = "0.4.24"
+lazy-regex = "2.5.0"
+tempfile = "3.4.0"
+
+# unix
+nix = "=0.24.2"
 
 # mashin
-mashin_core = { version = "0.1.5", path = "./core" }
-mashin_runtime = { version = "0.1.5", path = "./runtime" }
-mashin_sdk = { version = "0.1.10", path = "./sdk" }
-mashin_macro = { version = "0.1.9", path = "./sdk/macro" }
-mashin_primitives = { version = "0.1.0", path = "./sdk/primitives" }
+mashin_core = { version = "0.1.6", path = "./core" }
+mashin_runtime = { version = "0.1.6", path = "./runtime" }
+mashin_sdk = { version = "0.1.11", path = "./sdk" }
+mashin_macro = { version = "0.1.10", path = "./sdk/macro" }
+mashin_primitives = { version = "0.1.1", path = "./sdk/primitives" }

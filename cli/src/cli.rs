@@ -18,8 +18,9 @@ use crate::{
 	http_client::HttpClient,
 	module_loader::TypescriptModuleLoader,
 	progress_manager::ProgressManager,
-	tools::{bindgen, doc},
-	Result,
+	tools::{bindgen, doc, upgrade},
+	util::display::write_to_stdout_ignore_sigpipe,
+	version, Result,
 };
 use clap::Parser;
 use console::{style, Emoji};
@@ -58,6 +59,10 @@ pub enum Subcommand {
 	Bindgen(BindgenCmd),
 	/// Generate documentation from TypeScript compatible with Mashin registry.
 	Doc(DocCmd),
+	/// Upgrade Mashin to latest version.
+	Upgrade(UpgradeCmd),
+	/// Get current Mashin version.
+	Version(VersionCmd),
 }
 
 #[derive(Debug, Parser)]
@@ -66,6 +71,40 @@ pub struct RunCmd {
 	pub main_module: String,
 	#[arg(long, default_value_t = false)]
 	pub dry_run: bool,
+}
+
+#[derive(Debug, Parser)]
+#[group(skip)]
+pub struct VersionCmd {}
+
+impl VersionCmd {
+	pub async fn run(&self) -> Result<()> {
+		let current_version = version::mashin();
+		log::info!("mashin {current_version} ({})", env!("GIT_COMMIT_HASH_SHORT"));
+		Ok(())
+	}
+}
+
+#[derive(Debug, Parser)]
+#[group(skip)]
+pub struct UpgradeCmd {}
+
+impl UpgradeCmd {
+	pub async fn run(&self) -> Result<()> {
+		let started = Instant::now();
+		let mashin_dir = MashinDir::new(None)?;
+		let http_client = HttpClient::new(
+			HttpCache::new(&mashin_dir.deps_folder_path()),
+			None,
+			true,
+			log::Level::Debug,
+			None,
+		)?;
+		upgrade::upgrade(&http_client).await?;
+		log::info!("{} Done in {}", Emoji("✨ ", "* "), HumanDuration(started.elapsed()));
+
+		Ok(())
+	}
 }
 
 #[derive(Debug, Parser)]
@@ -83,7 +122,7 @@ pub struct BindgenCmd {
 }
 
 impl BindgenCmd {
-	pub async fn run(&self, _args: Vec<String>) -> Result<()> {
+	pub async fn run(&self) -> Result<()> {
 		let started = Instant::now();
 		let bindings = current_dir()?.join(&self.bindings);
 		let out = match self.out.as_deref() {
@@ -117,7 +156,7 @@ pub struct DocCmd {
 }
 
 impl DocCmd {
-	pub async fn run(&self, _args: Vec<String>) -> Result<()> {
+	pub async fn run(&self) -> Result<()> {
 		let started = Instant::now();
 		let out = match self.out.as_deref() {
 			Some(out) => current_dir()?.join(out),
@@ -153,11 +192,24 @@ pub struct DestroyCmd {
 
 impl RunCmd {
 	pub async fn run(&self, args: Vec<String>) -> Result<()> {
+		write_to_stdout_ignore_sigpipe(
+			format!("\n\n{}\n", style(crate::MASHIN).bold()).as_bytes(),
+		)?;
+
 		let started = Instant::now();
 
 		let mashin_dir = MashinDir::new(None)?;
 		let backend_state = BackendState::new(&mashin_dir)?;
 		let backend = Rc::new(RefCell::new(backend_state));
+		let mut progress_manager = ProgressManager::new();
+
+		let http_client = HttpClient::new(
+			HttpCache::new(&mashin_dir.deps_folder_path()),
+			None,
+			true,
+			log::Level::Info,
+			Some(progress_manager.http_progress.clone()),
+		)?;
 
 		let create_runtime = |command, executed_resource, maybe_count, progress_bar| {
 			let BuiltEngine { engine, module_loader } = build_engine(
@@ -167,13 +219,17 @@ impl RunCmd {
 				maybe_count,
 				backend.clone(),
 				mashin_dir.clone(),
+				http_client.clone(),
 			)?;
 			Runtime::new(&self.main_module, engine, module_loader, args.clone())
 		};
 
-		let mut progress_manager = ProgressManager::new();
-
 		log::info!("    Starting the engine");
+
+		upgrade::check_for_upgrades(
+			Arc::new(http_client.clone()),
+			mashin_dir.upgrade_check_file_path(),
+		);
 
 		let isolated_pm = progress_manager.clone();
 		let total_resources = create_runtime(RuntimeCommand::Prepare, None, None, &isolated_pm)?
@@ -250,14 +306,8 @@ fn build_engine(
 	maybe_resources_count: Option<u64>,
 	backend: Rc<RefCell<BackendState>>,
 	mashin_dir: MashinDir,
+	http_client: HttpClient,
 ) -> Result<BuiltEngine> {
-	let http_client = HttpClient::new(
-		HttpCache::new(&mashin_dir.deps_folder_path()),
-		None,
-		true,
-		log::Level::Info,
-		Some(progress_manager.http_progress.clone()),
-	)?;
 	let http_client_rc = Rc::new(http_client.clone());
 	let module_loader = Rc::new(TypescriptModuleLoader { http_client: Arc::new(http_client) });
 

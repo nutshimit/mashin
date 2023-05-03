@@ -1,0 +1,26 @@
+name: post-release
+
+on:
+  release:
+    types: [published]
+jobs:
+  update-get-version:
+    name: update get.mashin.land version
+    runs-on: ubuntu-22.04
+    if: github.repository == 'nutshimit/mashin'
+    steps:
+
+      - name: Generate `release-latest.txt`
+        run: |
+          mkdir -p release
+          echo ${GITHUB_REF#refs/*/} > release/release-latest.txt
+
+      - uses: jakejarvis/s3-sync-action@master
+        with:
+          args: --acl public-read --delete
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET_GET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
+          AWS_REGION: us-east-1
+          SOURCE_DIR: release
