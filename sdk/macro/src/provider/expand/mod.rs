@@ -14,7 +14,7 @@
 \* ---------------------------------------------------------*/
 
 use super::parse::Def;
-use crate::utils::ts::{get_glue, metafile, process_struct};
+use crate::utils::ts::{get_docs, get_glue, metafile, process_struct};
 use inflector::Inflector;
 use mashin_primitives::InternalMashinType;
 use quote::ToTokens;
@@ -28,8 +28,12 @@ mod ts;
 
 pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	let pkg_provider_name = env::var("CARGO_PKG_NAME").unwrap_or_default();
-	let mut glue = get_glue();
 	let provider_name = &def.item.ident.to_string().to_pascal_case();
+	let mut glue = get_glue();
+
+	// we need to proces the provider before it get removed
+	glue.doc = get_docs(&def.provider.attrs);
+
 	let provider = provider::expand_provider(&mut def);
 	let config = config::expand_config(&mut def);
 	let builder = builder::expand_builder(&mut def);

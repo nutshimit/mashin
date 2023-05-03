@@ -26,6 +26,7 @@ mod http_client;
 mod logger;
 mod module_loader;
 mod progress_manager;
+mod tools;
 mod util;
 
 const MASHIN: &str = r#"
@@ -48,8 +49,10 @@ pub async fn main() -> Result<(), anyhow::Error> {
 	write_to_stdout_ignore_sigpipe(format!("\n\n{}\n", style(MASHIN).bold()).as_bytes())?;
 
 	match cli.subcommand {
-		Subcommand::Run(cmd) => cmd.run(args).await,
+		Subcommand::Bindgen(cmd) => cmd.run(args).await,
+		Subcommand::Doc(cmd) => cmd.run(args).await,
 		Subcommand::Destroy(cmd) => cmd.run(args).await,
+		Subcommand::Run(cmd) => cmd.run(args).await,
 	}
 }
 

@@ -57,7 +57,8 @@
 #[macro_export]
 macro_rules! construct_provider {
 	(
-    $name:ident
+	 $(#[$provider_attr:meta])*
+	 $name:ident
     $(, config = { $( $(#[$configs_attr:meta])* $configs_id:ident : $configs_type:ty ),* $(,)? } )?
     $(, resources = [ $( $(#[$resource_attr:meta])* $resource:ident ),* $(,)? ] )?
     $(, state = $state_fn:expr )?
@@ -73,6 +74,7 @@ macro_rules! construct_provider {
 				ResourceDefault, ResourceDiff, Result,
 			};
 
+			$(#[$provider_attr])*
 			#[mashin::provider]
 			pub struct Provider;
 

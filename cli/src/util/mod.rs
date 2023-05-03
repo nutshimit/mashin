@@ -14,4 +14,6 @@
 \* ---------------------------------------------------------*/
 
 pub mod display;
+pub mod file;
+pub mod glue;
 pub mod print_diff;

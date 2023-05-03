@@ -13,9 +13,13 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use anyhow::Result;
-use mashin_primitives::{Glue, InternalMashinType};
+use crate::{
+	util::{file, glue},
+	Result,
+};
+use mashin_primitives::InternalMashinType;
 use serde::Deserialize;
+use std::path::PathBuf;
 
 #[derive(Deserialize)]
 struct Version {
@@ -24,16 +28,25 @@ struct Version {
 	availables: Vec<String>,
 }
 
-pub async fn generate_ts(glue: &Glue) -> Result<String> {
-	// grab latest SDK version
-	let latest_sdk = reqwest::Client::new()
-		.get("https://mashin.run/std.json")
-		.send()
-		.await?
-		.json::<Version>()
-		.await?
-		.latest;
+pub async fn write_ts(
+	bindings: &PathBuf,
+	out: &PathBuf,
+	sdk_version: Option<String>,
+) -> Result<()> {
+	let glue: mashin_primitives::Glue = glue::get_glue(bindings)?;
 
+	let sdk_version_to_use = sdk_version.unwrap_or(
+		// grab latest SDK version
+		reqwest::Client::new()
+			.get("https://mashin.run/std.json")
+			.send()
+			.await?
+			.json::<Version>()
+			.await?
+			.latest,
+	);
+
+	let provider_doc = &glue.doc;
 	let mut provider_config = None;
 	let output = glue
 		.type_defs
@@ -57,32 +70,29 @@ pub async fn generate_ts(glue: &Glue) -> Result<String> {
 				let name = &ty.name;
 				let output_name = format!("{}Outputs", name);
 				let config_ident = format!("{}Config", name);
-
+				let doc = &ty.doc;
 				let resource_class = format!(
 					r#"
-export class {name}<T extends Lowercase<string>> extends resource.Resource<
-{output_name},
-T
-> {{
-    #props: {config_ident};
-    constructor(
-        name: resource.ResourceName<T>,
-        props: {config_ident},
-        opts: resource.ResourceOptions
-    ) {{
-        super(name, "{resource_name}", props, opts);
-        this.#props = props;
-    }}
+{doc}export class {name}<T extends Lowercase<string>> extends MashinResource<{output_name}, T> {{
+   #props: {config_ident};
+   constructor(
+      name: ResourceName<T>,
+      props: {config_ident},
+      opts: ResourceOptions
+   ) {{
+      super(name, "{resource_name}", props, opts);
+      this.#props = props;
+   }}
 
-    get props() {{
-        return this.#props;
-    }}
+   get props() {{
+      return this.#props;
+   }}
 }}
 "#
 				);
 				format!(
-					"{}export interface {} extends Outputs {{\n{}\n}}\n{}",
-					ty.doc, output_name, ty.typescript, resource_class
+					"export interface {} extends Outputs {{\n{}\n}}\n{}",
+					output_name, ty.typescript, resource_class
 				)
 			},
 			InternalMashinType::Extra => {
@@ -112,20 +122,26 @@ T
 *   Do not edit manually.                                  *
 *                                                          *
 \* ---------------------------------------------------------*/
-import * as resource from "https://mashin.run/std@{latest_sdk}/sdk/resource.ts";
-import {{ Inputs, Outputs }} from "https://mashin.run/std@{latest_sdk}/sdk/output.ts";
-import {{ getFileName }} from "https://mashin.run/std@{latest_sdk}/sdk/download.ts";
+import {{
+	Resource as MashinResource,
+	Provider as MashinProvider,
+	getFileName,
+	Inputs,
+	Outputs,
+	ResourceName,
+	ResourceOptions,
+ }} from "https://mashin.run/std@{sdk_version_to_use}/sdk/mod.ts";
 
 export const VERSION = "{crate_version}";
 const LOCAL_PATH = Deno.env.get("LOCAL_PLUGIN")
-  ? "./target/debug/lib{crate_name}.dylib"
-	: await globalThis.__mashin.downloadProvider(
+   ? "./target/debug/lib{crate_name}.dylib"
+   : await globalThis.__mashin.downloadProvider(
       "github",
       new URL(
-        getFileName("{crate_name}"),
-        `{github_url}/releases/download/v${{VERSION}}/`
+         getFileName("{crate_name}"),
+         `{github_url}/releases/download/v${{VERSION}}/`
       ).toString()
-    );
+   );
 "#
 	);
 
@@ -134,13 +150,15 @@ const LOCAL_PATH = Deno.env.get("LOCAL_PLUGIN")
 
 	let provider = format!(
 		r#"
-export class Provider extends resource.Provider {{
-    constructor(name: string, args?: {config_ident}) {{
-      super(name, LOCAL_PATH, args);
-    }}
+{provider_doc}export class Provider extends MashinProvider {{
+   constructor(name: string, args?: {config_ident}) {{
+      super(name, LOCAL_PATH as string, args);
+   }}
 }}
 "#
 	);
 
-	Ok(format!("{header}\n{output}\n{provider}"))
+	let typescript = format!("{header}\n{output}\n{provider}");
+
+	file::write_file(out, "mod.ts", typescript)
 }

@@ -12,7 +12,6 @@ members = [
     "cli",
     "sdk",
     "sdk/macro",
-    "sdk/bindgen",
     "sdk/primitives",
 ]
 
@@ -20,7 +19,7 @@ members = [
 anyhow = "1.0.71"
 thiserror = "1.0.37"
 tokio = { version = "=1.25.0", features = ["full"] }
-deno_ast = { version = "=0.25.0", features = ["transpiling"] }
+deno_ast = { version = "=0.26.0", features = ["transpiling"] }
 deno_core = "=0.177.0"
 deno_web = "=0.126.0"
 deno_fetch = "=0.119.0"
@@ -28,7 +27,9 @@ deno_console = "=0.95.0"
 deno_webidl = "=0.95.0"
 deno_url = "=0.95.0"
 deno_websocket = "=0.100.0"
-deno_bindgen = "0.7.0"
+deno_doc = "0.62.0"
+deno_graph = "0.48.1"
+
 dlopen = "0.1.8"
 serde = { version = "1.0.160", features = ["derive", "rc"] }
 serde_json = "1.0.96"
@@ -43,7 +44,7 @@ env_logger = "0.10.0"
 reqwest = { version = "0.11.17", features = ["blocking", "json", "rustls-tls", "rustls-tls-native-roots", "rustls-tls-webpki-roots"], default-features = false }
 urn = { version = "0.5.1", features = ["serde"] }
 url = "2.3"
-syn = { version = "2.0.15", features = ["full"] }
+syn = { version = "2.0.15", features = ["full", "extra-traits"] }
 quote = "1.0.26"
 base64 = "0.21.0"
 itertools = "0.10"
@@ -53,6 +54,7 @@ dialoguer = "0.10.4"
 indicatif = "0.17.3"
 console = "0.15.5"
 parking_lot = "0.12.1"
+futures = "0.3.26"
 
 # mashin
 mashin_core = { version = "0.1.5", path = "./core" }
