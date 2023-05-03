@@ -40,7 +40,7 @@ for CRATE_DIR in ${ORDER[@]}; do
 	read_toml
 	remote_version
 	# Seems the latest version matches, skip by default.
-	if [ "$REMOTE_VERSION" = "$VERSION" ] || [[ "$REMOTE_VERSION" > "$VERSION" ]]; then
+	if [ "$REMOTE_VERSION" = "$VERSION" ]; then
 		RET=""
 		echo "Seems like $NAME@$REMOTE_VERSION is already published. Continuing in 5s. "
 		read -t 5 -p ">>>> Type [r][enter] to retry, or [enter] to continue... " RET || true
