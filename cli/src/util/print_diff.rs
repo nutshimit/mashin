@@ -14,11 +14,11 @@
 \* ---------------------------------------------------------*/
 
 #![allow(unused_variables, dead_code)]
+use super::display::write_to_stdout_ignore_sigpipe;
 use crate::Result;
 use console::style;
 use mashin_runtime::ExecutedResources;
 use mashin_sdk::ResourceAction;
-use super::display::write_to_stdout_ignore_sigpipe;
 
 macro_rules! skip_empty {
 	($res:expr) => {
