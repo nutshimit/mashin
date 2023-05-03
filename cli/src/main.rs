@@ -16,9 +16,7 @@
 pub(crate) use anyhow::Result;
 use clap::Parser;
 use cli::{Cli, Subcommand};
-use console::style;
 use std::env;
-use util::display::write_to_stdout_ignore_sigpipe;
 
 mod cache;
 mod cli;
@@ -28,6 +26,7 @@ mod module_loader;
 mod progress_manager;
 mod tools;
 mod util;
+mod version;
 
 const MASHIN: &str = r#"
                                      ███╗░░░███╗░█████╗░░██████╗██╗░░██╗██╗███╗░░██╗
@@ -46,13 +45,14 @@ pub async fn main() -> Result<(), anyhow::Error> {
 	let cli = Cli::parse();
 
 	logger::init();
-	write_to_stdout_ignore_sigpipe(format!("\n\n{}\n", style(MASHIN).bold()).as_bytes())?;
 
 	match cli.subcommand {
-		Subcommand::Bindgen(cmd) => cmd.run(args).await,
-		Subcommand::Doc(cmd) => cmd.run(args).await,
+		Subcommand::Bindgen(cmd) => cmd.run().await,
+		Subcommand::Doc(cmd) => cmd.run().await,
 		Subcommand::Destroy(cmd) => cmd.run(args).await,
 		Subcommand::Run(cmd) => cmd.run(args).await,
+		Subcommand::Upgrade(cmd) => cmd.run().await,
+		Subcommand::Version(cmd) => cmd.run().await,
 	}
 }
 

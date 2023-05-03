@@ -13,7 +13,7 @@
  *                                                          *
 \* ---------------------------------------------------------*/
 
-use crate::{cache::HttpCache, Result};
+use crate::{cache::HttpCache, version::get_user_agent, Result};
 use anyhow::bail;
 use deno_core::{
 	error::{custom_error, generic_error},
@@ -73,7 +73,7 @@ impl HttpClient {
 	) -> Result<Self> {
 		Ok(Self {
 			client: create_http_client(
-				format!("mashin_core/{}", env!("CARGO_PKG_VERSION")),
+				get_user_agent().to_string(),
 				None,
 				vec![],
 				None,
@@ -92,12 +92,17 @@ impl HttpClient {
 		self.client.get(url.clone())
 	}
 
-	pub async fn _download(&self, url: &reqwest::Url) -> Result<Vec<u8>> {
+	pub async fn download(&self, url: &reqwest::Url) -> Result<Vec<u8>> {
 		let maybe_bytes = self.inner_download(url, None).await?;
 		match maybe_bytes {
 			(Some(bytes), _) => Ok(bytes),
 			(None, _) => Err(custom_error("Http", "Not found.")),
 		}
+	}
+
+	pub async fn download_text(&self, url: &reqwest::Url) -> Result<String> {
+		let bytes = self.download(url).await?;
+		Ok(String::from_utf8(bytes)?)
 	}
 
 	async fn inner_download(

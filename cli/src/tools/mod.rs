@@ -15,3 +15,4 @@
 
 pub mod bindgen;
 pub mod doc;
+pub mod upgrade;

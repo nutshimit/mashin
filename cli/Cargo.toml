@@ -26,13 +26,20 @@ deno_fetch.workspace = true
 deno_core.workspace = true
 deno_doc.workspace = true
 deno_graph.workspace = true
+deno_semver.workspace = true
 
 env_logger.workspace = true
 clap.workspace = true
 dialoguer.workspace = true
 indicatif.workspace = true
 console.workspace = true
+chrono.workspace = true
+lazy-regex.workspace = true
+tempfile.workspace = true
 
 encoding_rs = "=0.8.31"
 ring = "=0.16.20"
 rand = "0.8.5"
+
+[target.'cfg(unix)'.dependencies]
+nix.workspace = true
