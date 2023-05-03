@@ -26,7 +26,9 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
-    concurrency: ci-${{ github.ref }}-${{ matrix.kind }}-${{ matrix.os }}
+    concurrency:
+      group: ci-${{ github.ref }}-${{ matrix.kind }}-${{ matrix.os }}
+      cancel-in-progress: true
 
     steps:
       - name: Clone repository
