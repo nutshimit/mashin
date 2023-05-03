@@ -5,3 +5,4 @@ mashin_core/node_modules*
 .mashin
 mod.lock
 .DS_Store
+release-latest.txt

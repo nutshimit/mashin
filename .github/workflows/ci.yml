@@ -25,7 +25,10 @@ jobs:
     timeout-minutes: 60
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    concurrency:
+      group: ci-${{ github.ref }}-${{ matrix.kind }}-${{ matrix.os }}
+      cancel-in-progress: true
 
     steps:
       - name: Clone repository
