@@ -1519,7 +1519,7 @@ dependencies = [
 
 [[package]]
 name = "mashin"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "anyhow",
  "atty",
@@ -1553,7 +1553,7 @@ dependencies = [
 
 [[package]]
 name = "mashin_core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1580,7 +1580,7 @@ dependencies = [
 
 [[package]]
 name = "mashin_macro"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "Inflector",
  "mashin_primitives",
@@ -1593,7 +1593,7 @@ dependencies = [
 
 [[package]]
 name = "mashin_primitives"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1601,7 +1601,7 @@ dependencies = [
 
 [[package]]
 name = "mashin_runtime"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "anyhow",
  "deno_console",
@@ -1623,7 +1623,7 @@ dependencies = [
 
 [[package]]
 name = "mashin_sdk"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "anyhow",
  "async-trait",
