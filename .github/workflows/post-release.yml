@@ -3,9 +3,6 @@ name: post-release
 on:
   release:
     types: [published]
-  push:
-    branches:
-      - lemarier-updater
 jobs:
   update-get-version:
     name: update get.mashin.land version
