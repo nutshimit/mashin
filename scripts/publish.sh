@@ -5,7 +5,7 @@
 
 set -eu
 
-ORDER=(sdk/primitives sdk/macro sdk/bindgen sdk core runtime cli)
+ORDER=(sdk/primitives sdk/macro sdk core runtime cli)
 
 function read_toml () {
 	NAME=""

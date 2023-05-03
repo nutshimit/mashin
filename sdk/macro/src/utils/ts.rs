@@ -89,6 +89,7 @@ pub(crate) fn process_struct(
 	mashin_ty: InternalMashinType,
 	overwrite_type_name: Option<String>,
 ) -> Result<(), String> {
+	println!("item {:?}", item);
 	match item {
 		syn::Item::Struct(syn::ItemStruct {
 			ident, attrs, fields: Fields::Named(fields), ..

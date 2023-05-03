@@ -19,10 +19,14 @@ atty.workspace = true
 
 mashin_runtime.workspace = true
 mashin_sdk.workspace = true
+mashin_primitives.workspace = true
 
 deno_ast = { workspace = true, features = ["transpiling"] }
 deno_fetch.workspace = true
 deno_core.workspace = true
+deno_doc.workspace = true
+deno_graph.workspace = true
+
 env_logger.workspace = true
 clap.workspace = true
 dialoguer.workspace = true

@@ -7,6 +7,7 @@ pub struct Glue {
 	pub name: String,
 	pub version: String,
 	pub repository: String,
+	pub doc: String,
 	pub type_defs: HashMap<String, TsType>,
 }
 

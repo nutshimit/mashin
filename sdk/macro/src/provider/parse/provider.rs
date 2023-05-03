@@ -22,6 +22,7 @@ pub struct ProviderDef {
 	pub index: usize,
 	pub attr_span: proc_macro2::Span,
 	pub docs: Vec<syn::Expr>,
+	pub attrs: Vec<syn::Attribute>,
 }
 
 mod keyword {
@@ -50,6 +51,6 @@ impl ProviderDef {
 
 		syn::parse2::<keyword::Provider>(item.ident.to_token_stream())?;
 
-		Ok(Self { index, attr_span, docs })
+		Ok(Self { index, attr_span, docs, attrs: item.attrs.clone() })
 	}
 }

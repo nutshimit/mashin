@@ -36,7 +36,7 @@ pub struct TypescriptModuleLoader {
 }
 
 impl TypescriptModuleLoader {
-	fn load_from_remote_url(
+	pub(crate) fn load_from_remote_url(
 		&self,
 		path: &ModuleSpecifier,
 		redirect_limit: i64,
@@ -84,7 +84,7 @@ impl TypescriptModuleLoader {
 		.boxed()
 	}
 
-	async fn load_from_filesystem(path: &ModuleSpecifier) -> Result<SourceFile> {
+	pub(crate) async fn load_from_filesystem(path: &ModuleSpecifier) -> Result<SourceFile> {
 		let local = path
 			.to_file_path()
 			.map_err(|_| uri_error(format!("Invalid file path.\n  Specifier: {path}")))?;
