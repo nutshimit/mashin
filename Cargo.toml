@@ -32,7 +32,7 @@ deno_graph = "0.48.1"
 deno_semver = "0.2.2"
 
 dlopen = "0.1.8"
-serde = { version = "1.0.160", features = ["derive", "rc"] }
+serde = { version = "1.0.162", features = ["derive", "rc"] }
 serde_json = "1.0.96"
 winapi = "=0.3.9"
 libffi = "3.1.0"
