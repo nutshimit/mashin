@@ -23,27 +23,25 @@ use std::path::PathBuf;
 
 #[derive(Deserialize)]
 struct Version {
-	latest: String,
-	#[allow(dead_code)]
-	availables: Vec<String>,
+	latest_version: String,
 }
 
 pub async fn write_ts(
 	bindings: &PathBuf,
 	out: &PathBuf,
-	sdk_version: Option<String>,
+	std_version: Option<String>,
 ) -> Result<()> {
 	let glue: mashin_primitives::Glue = glue::get_glue(bindings)?;
 
-	let sdk_version_to_use = sdk_version.unwrap_or(
-		// grab latest SDK version
+	let std_version_to_use = std_version.unwrap_or(
+		// grab latest STD version
 		reqwest::Client::new()
-			.get("https://mashin.run/std.json")
+			.get("https://mashin.run/api/v1/lib/std")
 			.send()
 			.await?
 			.json::<Version>()
 			.await?
-			.latest,
+			.latest_version,
 	);
 
 	let provider_doc = &glue.doc;
@@ -130,7 +128,7 @@ import {{
 	Outputs,
 	ResourceName,
 	ResourceOptions,
- }} from "https://mashin.run/std@{sdk_version_to_use}/sdk/mod.ts";
+ }} from "https://mashin.run/std@{std_version_to_use}/sdk/mod.ts";
 
 export const VERSION = "{crate_version}";
 const LOCAL_PATH = Deno.env.get("LOCAL_PLUGIN")
