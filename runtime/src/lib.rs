@@ -132,6 +132,7 @@ impl<T: Config> Runtime<T> {
 				"98_global_scope.js",
 				"99_main.js",
 			))
+			.esm_entry_point("ext:mashin_core/99_main.js")
 			.ops(stdlib::<T>())
 			.state(move |state| {
 				// fixme: init in cli?
@@ -221,7 +222,8 @@ impl<T: Config> Runtime<T> {
 					// allow target with Deno.env
 					"target": env!("TARGET")
 				})
-			),
+			)
+			.into(),
 		)?;
 		Ok(())
 	}

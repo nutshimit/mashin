@@ -73,7 +73,7 @@ impl HttpClient {
 	) -> Result<Self> {
 		Ok(Self {
 			client: create_http_client(
-				get_user_agent().to_string(),
+				get_user_agent(),
 				None,
 				vec![],
 				None,
