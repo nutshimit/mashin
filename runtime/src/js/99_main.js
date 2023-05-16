@@ -13,7 +13,7 @@ import {
 import DOMException from "ext:deno_web/01_dom_exception.js";
 import * as util from "ext:mashin_core/06_util.js";
 // console
-import * as console from "ext:deno_console/02_console.js";
+import * as console from "ext:deno_console/01_console.js";
 
 // Set up global properties
 ObjectDefineProperties(globalThis, globalScope);
@@ -36,13 +36,6 @@ function bootstrapMainRuntime(runtimeOptions) {
   globalThis.Deno.build = core.build;
   globalThis.Deno.permissions = {
     request: (perm) => {},
-  };
-
-  const consoleVoid = {
-    log: (..._data) => {},
-    warn: (..._data) => {},
-    trace: (..._data) => {},
-    debug: (..._data) => {},
   };
 
   // only display the console on first run

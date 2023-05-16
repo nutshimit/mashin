@@ -1,5 +1,3 @@
-// console
-import * as console from "ext:deno_console/02_console.js";
 // fetch
 import * as headers from "ext:deno_fetch/20_headers.js";
 import * as formData from "ext:deno_fetch/21_formdata.js";
@@ -16,17 +14,14 @@ import * as base64 from "ext:deno_web/05_base64.js";
 import * as encoding from "ext:deno_web/08_text_encoding.js";
 import * as url from "ext:deno_url/00_url.js";
 import * as urlPattern from "ext:deno_url/01_urlpattern.js";
-
-const core = globalThis.Deno.core;
-
-const consoleVoid = {
-  log: (..._data) => {},
-  warn: (..._data) => {},
-  trace: (..._data) => {},
-  debug: (..._data) => {},
-};
+import * as performance from "ext:deno_web/15_performance.js";
+import * as messagePort from "ext:deno_web/13_message_port.js";
+import * as fileReader from "ext:deno_web/10_filereader.js";
+import * as compression from "ext:deno_web/14_compression.js";
+import * as globalInterfaces from "ext:deno_web/04_global_interfaces.js";
 
 const globalScope = {
+  Window: globalInterfaces.windowConstructorDescriptor,
   ErrorEvent: util.nonEnumerable(event.ErrorEvent),
   Event: util.nonEnumerable(event.Event),
   EventTarget: util.nonEnumerable(event.EventTarget),
@@ -48,6 +43,17 @@ const globalScope = {
   URL: util.nonEnumerable(url.URL),
   URLPattern: util.nonEnumerable(urlPattern.URLPattern),
   URLSearchParams: util.nonEnumerable(url.URLSearchParams),
+
+  Performance: util.nonEnumerable(performance.Performance),
+  PerformanceEntry: util.nonEnumerable(performance.PerformanceEntry),
+  PerformanceMark: util.nonEnumerable(performance.PerformanceMark),
+  PerformanceMeasure: util.nonEnumerable(performance.PerformanceMeasure),
+
+  structuredClone: util.writable(messagePort.structuredClone),
+  FileReader: util.nonEnumerable(fileReader.FileReader),
+
+  CompressionStream: util.nonEnumerable(compression.CompressionStream),
+  DecompressionStream: util.nonEnumerable(compression.DecompressionStream),
 };
 
 export { globalScope };
