@@ -104,8 +104,9 @@ pub async fn write_ts(
 	let crate_version = &glue.version;
 	let github_url = &glue.repository;
 
-	let header = format!(
-		r#"/* -------------------------------------------------------- *\
+	let header = if cfg!(not(windows)) {
+		format!(
+			r#"/* -------------------------------------------------------- *\
 *                                                          *
 *      ███╗░░░███╗░█████╗░░██████╗██╗░░██╗██╗███╗░░██╗     *
 *      ████╗░████║██╔══██╗██╔════╝██║░░██║██║████╗░██║     *
@@ -141,7 +142,47 @@ const LOCAL_PATH = Deno.env.get("LOCAL_PLUGIN")
       ).toString()
    );
 "#
-	);
+		)
+	} else {
+		format!(
+			r#"/* -------------------------------------------------------- *\
+*                                                          *
+*      ███╗░░░███╗░█████╗░░██████╗██╗░░██╗██╗███╗░░██╗     *
+*      ████╗░████║██╔══██╗██╔════╝██║░░██║██║████╗░██║     *
+*      ██╔████╔██║███████║╚█████╗░███████║██║██╔██╗██║     *
+*      ██║╚██╔╝██║██╔══██║░╚═══██╗██╔══██║██║██║╚████║     *
+*      ██║░╚═╝░██║██║░░██║██████╔╝██║░░██║██║██║░╚███║     *
+*      ╚═╝░░░░░╚═╝╚═╝░░╚═╝╚═════╝░╚═╝░░╚═╝╚═╝╚═╝░░╚══╝     *
+*                                         by Nutshimit     *
+* -------------------------------------------------------- *
+*                                                          *
+*   This file is generated automatically by mashin.        *
+*   Do not edit manually.                                  *
+*                                                          *
+\* ---------------------------------------------------------*/
+import {{
+	Resource as MashinResource,
+	Provider as MashinProvider,
+	getFileName,
+	Inputs,
+	Outputs,
+	ResourceName,
+	ResourceOptions,
+ }} from "https://mashin.run/std@{std_version_to_use}/sdk/mod.ts";
+
+export const VERSION = "{crate_version}";
+const LOCAL_PATH = Deno.env.get("LOCAL_PLUGIN")
+   ? "./target/debug/{crate_name}.dll"
+   : await globalThis.__mashin.downloadProvider(
+      "github",
+      new URL(
+         getFileName("{crate_name}"),
+         `{github_url}/releases/download/v${{VERSION}}/`
+      ).toString()
+   );
+"#
+		)
+	};
 
 	let config_ident = provider_config.unwrap_or("Config".into());
 	//let provider_ident = provider_config.unwrap_or("Provider".into()).replace("Config", "");
