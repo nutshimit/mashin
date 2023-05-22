@@ -53,7 +53,7 @@ sodiumoxide = "0.2.7"
 clap = { version = "4.2.7", features = ["derive"] }
 dialoguer = "0.10.4"
 indicatif = "0.17.3"
-console = "0.15.5"
+console = "0.15.7"
 parking_lot = "0.12.1"
 chrono = "0.4.24"
 lazy-regex = "2.5.0"
