@@ -47,7 +47,7 @@ urn = { version = "0.5.1", features = ["serde"] }
 url = "2.3"
 syn = { version = "2.0.16", features = ["full", "extra-traits"] }
 quote = "1.0.27"
-base64 = "0.21.0"
+base64 = "0.21.2"
 itertools = "0.10"
 sodiumoxide = "0.2.7"
 clap = { version = "4.2.7", features = ["derive"] }
